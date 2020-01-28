@@ -1,0 +1,62 @@
+timeout: 14400s
+
+steps:
+
+## Clone & checkout the cert-manager repository
+- name: gcr.io/cloud-builders/git
+  dir: "go/src/github.com/jetstack/cert-manager"
+  entrypoint: bash
+  args:
+  - -c
+  - |
+    set -e
+    git clone "${_CM_REPO}" . && git checkout "${_CM_REF}"
+
+## Clone & checkout the cert-manager release repository
+- name: gcr.io/cloud-builders/go
+  dir: "go/src/github.com/cert-manager/release"
+  entrypoint: sh
+  args:
+  - -c
+  - |
+    set -e
+    git clone "${_RELEASE_REPO_URL}" . && git checkout "${_RELEASE_REPO_REF}"
+    CGO_ENABLED=0 go build -o /workspace/go/bin/cmrel ./cmd/cmrel
+
+## Build and push the release artifacts
+- name: 'l.gcr.io/google/bazel:${_BAZEL_VERSION}'
+  dir: "go/src/github.com/jetstack/cert-manager"
+  entrypoint: /workspace/go/bin/cmrel
+  args:
+  - gcb
+  - stage
+  - --repo-path=.
+  - --release-version=${_RELEASE_VERSION}
+  - --published-image-repo=${_PUBLISHED_IMAGE_REPO}
+  - --bucket=${_RELEASE_BUCKET}
+
+tags:
+- "cert-manager-release-stage"
+- "bazel-${_BAZEL_VERSION}"
+- "ref-${_CM_REF}"
+- "branch-${_TAG_RELEASE_BRANCH}"
+
+# Use the --substitutions=_OS=linux,_ARCH=arm64 flag to gcloud build submit to
+# override these values
+substitutions:
+  ## Required parameters
+  _CM_REF: ""
+  ## Optional/defaulted parameters
+  _CM_REPO: https://github.com/jetstack/cert-manager.git
+  _RELEASE_VERSION: ""
+  _RELEASE_BUCKET: ""
+  _PUBLISHED_IMAGE_REPO: quay.io/jetstack
+  _BAZEL_VERSION: "2.0.0"
+  ## Options controlling the version of the release tooling used in the build.
+  _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
+  _RELEASE_REPO_REF: "master"
+  ## Used as a tag to identify the build more easily later
+  _TAG_RELEASE_BRANCH: ""
+
+options:
+  machineType: n1-highcpu-32
