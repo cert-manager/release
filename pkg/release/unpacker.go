@@ -41,6 +41,7 @@ type Unpacked struct {
 	Charts                []manifests.Chart
 	YAMLs                 []manifests.YAML
 	ComponentImageBundles map[string][]images.Tar
+	UBIImageBundles       map[string][]images.Tar
 }
 
 // Unpack takes a staged release, inspects its metadata, fetches referenced
@@ -90,6 +91,11 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 		return nil, err
 	}
 
+	ubiBundles, err := unpackUBIImagesFromRelease(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+
 	log.Printf("Extracted %d component bundles from images archive", len(bundles))
 	return &Unpacked{
 		ReleaseVersion:        s.Metadata().ReleaseVersion,
@@ -97,6 +103,7 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 		YAMLs:                 yamls,
 		Charts:                charts,
 		ComponentImageBundles: bundles,
+		UBIImageBundles:       ubiBundles,
 	}, nil
 }
 
@@ -106,9 +113,22 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][]images.Tar, error) {
 	log.Printf("Unpacking 'server' type artifacts")
 	serverA := s.ArtifactsOfKind("server")
+	return unpackImages(ctx, serverA)
+}
+
+// unpackUBIImagesFromRelease will extract all 'image-like' tar archives
+// from the various 'server' .tar.gz files and return a map of component name
+// to a slice of images.Tar for each image in the bundle.
+func unpackUBIImagesFromRelease(ctx context.Context, s *Staged) (map[string][]images.Tar, error) {
+	log.Printf("Unpacking 'ubi' type artifacts")
+	ubiA := s.ArtifactsOfKind("ubi")
+	return unpackImages(ctx, ubiA)
+}
+
+func unpackImages(ctx context.Context, artifacts []StagedArtifact) (map[string][]images.Tar, error) {
 	// tarBundles is a map from component name to slices of images.Tar
 	tarBundles := make(map[string][]images.Tar)
-	for _, a := range serverA {
+	for _, a := range artifacts {
 		dir, err := extractStagedArtifactToTempDir(ctx, &a)
 		if err != nil {
 			return nil, err

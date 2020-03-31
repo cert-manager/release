@@ -74,7 +74,11 @@ var (
 	// for during the release.
 	// This is used to drive the `--platforms` flag passed to 'bazel build' as
 	// well as to determine which image artifacts should be uploaded.
-	ServerArchitectures = []string{"amd64", "arm", "arm64"}
+	ServerArchitectures = []string{"amd64", "arm", "arm64", "ppc64le", "s390x"}
+
+	// UBIArchitectures is defined separately as there is no 'arm' variant of
+	// the UBI8 base image.
+	UBIArchitectures = []string{"amd64", "arm64", "ppc64le", "s390x"}
 )
 
 // BucketPathForRelease will assemble an output directory path for the given
