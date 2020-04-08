@@ -267,7 +267,7 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 
 	log.Printf("Creating multi-arch manifest lists for UBI image components")
 	for name, tars := range rel.UBIImageBundles {
-		manifestListName := buildManifestListName(o.PublishedImageRepository, name, rel.ReleaseVersion)
+		manifestListName := buildManifestListName(o.PublishedImageRepository, name, rel.ReleaseVersion + "-ubi")
 		if err := registry.CreateManifestList(manifestListName, tars); err != nil {
 			return err
 		}
