@@ -26,6 +26,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/cert-manager/release/pkg/release/images"
 	"github.com/cert-manager/release/pkg/release/manifests"
@@ -113,7 +114,7 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][]images.Tar, error) {
 	log.Printf("Unpacking 'server' type artifacts")
 	serverA := s.ArtifactsOfKind("server")
-	return unpackImages(ctx, serverA)
+	return unpackImages(ctx, serverA, "")
 }
 
 // unpackUBIImagesFromRelease will extract all 'image-like' tar archives
@@ -122,10 +123,10 @@ func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][
 func unpackUBIImagesFromRelease(ctx context.Context, s *Staged) (map[string][]images.Tar, error) {
 	log.Printf("Unpacking 'ubi' type artifacts")
 	ubiA := s.ArtifactsOfKind("ubi")
-	return unpackImages(ctx, ubiA)
+	return unpackImages(ctx, ubiA, "-ubi")
 }
 
-func unpackImages(ctx context.Context, artifacts []StagedArtifact) (map[string][]images.Tar, error) {
+func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix string) (map[string][]images.Tar, error) {
 	// tarBundles is a map from component name to slices of images.Tar
 	tarBundles := make(map[string][]images.Tar)
 	for _, a := range artifacts {
@@ -144,7 +145,7 @@ func unpackImages(ctx context.Context, artifacts []StagedArtifact) (map[string][
 			}
 
 			baseName := filepath.Base(archive)
-			componentName := baseName[:len(baseName)-len(filepath.Ext(baseName))]
+			componentName := strings.TrimSuffix(baseName[:len(baseName)-len(filepath.Ext(baseName))], trimSuffix)
 			log.Printf("Found image for component %q with name %q", componentName, imageTar.ImageName())
 			tarBundles[componentName] = append(tarBundles[componentName], *imageTar)
 		}
