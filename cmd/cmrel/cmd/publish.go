@@ -156,7 +156,6 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	build.Substitutions["_RELEASE_NAME"] = o.ReleaseName
 	build.Substitutions["_RELEASE_BUCKET"] = o.Bucket
 	build.Substitutions["_RELEASE_REPO_URL"] = "https://github.com/cert-manager/release.git"
-	build.Substitutions["_RELEASE_REPO_REF"] = "init"
 	build.Substitutions["_NO_MOCK"] = fmt.Sprintf("%t", o.NoMock)
 	build.Substitutions["_PUBLISHED_GITHUB_ORG"] = o.PublishedGitHubOrg
 	build.Substitutions["_PUBLISHED_GITHUB_REPO"] = o.PublishedGitHubRepo
