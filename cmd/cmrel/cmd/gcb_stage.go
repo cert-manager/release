@@ -33,6 +33,7 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/cert-manager/release/pkg/release"
 )
@@ -139,23 +140,32 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 	// of all the artifacts that were built during a `bazel run` invocation.
 	// This will mean we don't have to update this release tool whenever we add an additional
 	// release artifact.
-	var artifacts []release.ArtifactMetadata
-	for _, arch := range release.ServerArchitectures {
+	allArchs := sets.NewString(append(release.ServerArchitectures, release.UBIArchitectures...)...)
+	osVariant := "linux"
+	for _, arch := range allArchs.List() {
 		// hardcode 'os' to 'linux' for docker image builds
-		os := "linux"
 		log.Printf("Building %q target for %q architecture", release.TarsBazelTarget, arch)
-		if err := runBazel(o.RepoPath, bazelBuildEnv(o), "build", "--stamp", platformFlagForOSArch(os, arch), release.TarsBazelTarget); err != nil {
+		if err := runBazel(o.RepoPath, bazelBuildEnv(o), "build", "--stamp", platformFlagForOSArch(osVariant, arch), release.TarsBazelTarget); err != nil {
 			return fmt.Errorf("failed building release artifacts for architecture %q: %w", arch, err)
 		}
+	}
 
+	var artifacts []release.ArtifactMetadata
+	for _, arch := range release.ServerArchitectures {
 		// create an artifact for the arch specific 'server' release tarball
 		artifactName := fmt.Sprintf("cert-manager-server-linux-%s.tar.gz", arch)
 		// Add the arch-specific .tar.gz file to the list of artifacts
-		if err := appendArtifact(&artifacts, o.RepoPath, artifactName, os, arch); err != nil {
+		if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
 			return err
 		}
-
-		// append artifacts for additional tarballs here
+	}
+	for _, arch := range release.UBIArchitectures {
+		// create an artifact for the arch specific 'server' release tarball
+		artifactName := fmt.Sprintf("cert-manager-ubi-linux-%s.tar.gz", arch)
+		// Add the arch-specific .tar.gz file to the list of artifacts
+		if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
+			return err
+		}
 	}
 	// Add the 'manifests' file to the release output
 	if err := appendArtifact(&artifacts, o.RepoPath, "cert-manager-manifests.tar.gz", "", ""); err != nil {
