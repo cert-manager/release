@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/cert-manager/release/pkg/release"
+	"github.com/cert-manager/release/pkg/release/images"
 )
 
 type Options struct {
@@ -35,18 +36,13 @@ type Options struct {
 
 func ValidateUnpackedRelease(opts Options, rel *release.Unpacked) ([]string, error) {
 	var violations []string
-	for componentName, tars := range rel.ComponentImageBundles {
-		for _, tar := range tars {
-			expectedName := fmt.Sprintf("%s/cert-manager-%s-%s", opts.ImageRepository, componentName, tar.Architecture())
-			actualNameWithoutTag := strings.Split(tar.ImageName(), ":")[0]
-			if expectedName != actualNameWithoutTag {
-				violations = append(violations, fmt.Sprintf("Image %q does not match expected named %q", tar.ImageName(), actualNameWithoutTag))
-			}
-			if tar.ImageTag() != opts.ReleaseVersion {
-				violations = append(violations, fmt.Sprintf("Image %q does not have expected tag %q", tar.ImageName(), opts.ReleaseVersion))
-			}
-		}
+	violations = append(violations, validateImageBundles(rel.ComponentImageBundles, opts)...)
+	ubiOptions := Options{
+		// append '-ubi' to the release version
+		ReleaseVersion:  opts.ReleaseVersion + "-ubi",
+		ImageRepository: opts.ImageRepository,
 	}
+	violations = append(violations, validateImageBundles(rel.UBIImageBundles, ubiOptions)...)
 	for _, ch := range rel.Charts {
 		if ch.Version() != opts.ReleaseVersion {
 			violations = append(violations, fmt.Sprintf("Helm chart sets 'version' to %q, expected %q", ch.Version(), opts.ReleaseVersion))
@@ -56,4 +52,21 @@ func ValidateUnpackedRelease(opts Options, rel *release.Unpacked) ([]string, err
 		}
 	}
 	return violations, nil
+}
+
+func validateImageBundles(bundles map[string][]images.Tar, opts Options) []string {
+	var violations []string
+	for componentName, tars := range bundles {
+		for _, tar := range tars {
+			expectedName := fmt.Sprintf("%s/cert-manager-%s-%s", opts.ImageRepository, componentName, tar.Architecture())
+			actualNameWithoutTag := strings.Split(tar.ImageName(), ":")[0]
+			if expectedName != actualNameWithoutTag {
+				violations = append(violations, fmt.Sprintf("Image %q does not match expected name %q", actualNameWithoutTag, expectedName))
+			}
+			if tar.ImageTag() != opts.ReleaseVersion {
+				violations = append(violations, fmt.Sprintf("Image %q does not have expected tag %q", tar.ImageName(), opts.ReleaseVersion))
+			}
+		}
+	}
+	return violations
 }
