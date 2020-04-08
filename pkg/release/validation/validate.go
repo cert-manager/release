@@ -35,10 +35,12 @@ type Options struct {
 
 func ValidateUnpackedRelease(opts Options, rel *release.Unpacked) ([]string, error) {
 	var violations []string
-	for _, tars := range rel.ComponentImageBundles {
+	for componentName, tars := range rel.ComponentImageBundles {
 		for _, tar := range tars {
-			if !strings.HasPrefix(tar.ImageName(), opts.ImageRepository+"/") {
-				violations = append(violations, fmt.Sprintf("Image %q does not have prefix %q", tar.ImageName(), opts.ImageRepository+"/"))
+			expectedName := fmt.Sprintf("%s/cert-manager-%s-%s", opts.ImageRepository, componentName, tar.Architecture())
+			actualNameWithoutTag := strings.Split(tar.ImageName(), ":")[0]
+			if expectedName != actualNameWithoutTag {
+				violations = append(violations, fmt.Sprintf("Image %q does not match expected named %q", tar.ImageName(), actualNameWithoutTag))
 			}
 			if tar.ImageTag() != opts.ReleaseVersion {
 				violations = append(violations, fmt.Sprintf("Image %q does not have expected tag %q", tar.ImageName(), opts.ReleaseVersion))
