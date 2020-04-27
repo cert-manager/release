@@ -140,13 +140,15 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 	// of all the artifacts that were built during a `bazel run` invocation.
 	// This will mean we don't have to update this release tool whenever we add an additional
 	// release artifact.
-	allArchs := sets.NewString(append(release.ServerArchitectures, release.UBIArchitectures...)...)
-	osVariant := "linux"
-	for _, arch := range allArchs.List() {
-		// hardcode 'os' to 'linux' for docker image builds
-		log.Printf("Building %q target for %q architecture", release.TarsBazelTarget, arch)
-		if err := runBazel(o.RepoPath, bazelBuildEnv(o), "build", "--stamp", platformFlagForOSArch(osVariant, arch), release.TarsBazelTarget); err != nil {
-			return fmt.Errorf("failed building release artifacts for architecture %q: %w", arch, err)
+
+	// hardcoded 'linux' for docker image builds
+	allOSes := sets.NewString(append(platformMapKeys(release.ClientPlatforms), "linux")...)
+	for _, osVariant := range allOSes.List() {
+		for _, arch := range release.ArchitecturesPerOS[osVariant] {
+			log.Printf("Building %q target for %q OS for %q architecture", release.TarsBazelTarget, osVariant, arch)
+			if err := runBazel(o.RepoPath, bazelBuildEnv(o), "build", "--stamp", platformFlagForOSArch(osVariant, arch), release.TarsBazelTarget); err != nil {
+				return fmt.Errorf("failed building release artifacts for architecture %q: %w", arch, err)
+			}
 		}
 	}
 
@@ -155,7 +157,7 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 		// create an artifact for the arch specific 'server' release tarball
 		artifactName := fmt.Sprintf("cert-manager-server-linux-%s.tar.gz", arch)
 		// Add the arch-specific .tar.gz file to the list of artifacts
-		if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
+		if err := appendArtifact(&artifacts, o.RepoPath, artifactName, "linux", arch); err != nil {
 			return err
 		}
 	}
@@ -163,8 +165,18 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 		// create an artifact for the arch specific 'server' release tarball
 		artifactName := fmt.Sprintf("cert-manager-ubi-linux-%s.tar.gz", arch)
 		// Add the arch-specific .tar.gz file to the list of artifacts
-		if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
+		if err := appendArtifact(&artifacts, o.RepoPath, artifactName, "linux", arch); err != nil {
 			return err
+		}
+	}
+	for osVariant, archs := range release.ClientPlatforms {
+		for _, arch := range archs {
+			// create an artifact for the os and arch specific 'ctl' release tarball
+			artifactName := fmt.Sprintf("cert-manager-ctl-%s-%s.tar.gz", osVariant, arch)
+			// Add the arch-specific .tar.gz file to the list of artifacts
+			if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
+				return err
+			}
 		}
 	}
 	// Add the 'manifests' file to the release output
@@ -323,4 +335,13 @@ func sha256SumFile(filename string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func platformMapKeys(in map[string][]string) []string {
+	keys := make([]string, 0, len(in))
+	for k := range in {
+		keys = append(keys, k)
+	}
+
+	return keys
 }

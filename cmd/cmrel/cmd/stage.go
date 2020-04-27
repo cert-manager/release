@@ -158,7 +158,6 @@ func runStage(rootOpts *rootOptions, o *stageOptions) error {
 	build.Substitutions["_CM_REF"] = o.GitRef
 	build.Substitutions["_RELEASE_VERSION"] = o.ReleaseVersion
 	build.Substitutions["_RELEASE_BUCKET"] = o.Bucket
-	build.Substitutions["_RELEASE_REPO_URL"] = "https://github.com/cert-manager/release.git"
 	build.Substitutions["_TAG_RELEASE_BRANCH"] = o.Branch
 	build.Substitutions["_PUBLISHED_IMAGE_REPO"] = o.PublishedImageRepository
 

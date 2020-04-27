@@ -225,6 +225,19 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 		manifestsByName[filepath.Base(manifest.Path())] = f
 	}
 
+	// open ctl binary files ahead of time to ensure they are available on disk
+	ctlBinariesByName := map[string]*os.File{}
+	for _, files := range rel.CtlBinaries {
+		for _, binary := range files {
+			f, err := os.Open(binary.Filepath())
+			if err != nil {
+				return fmt.Errorf("failed to open manifest file to be uploaded: %v", err)
+			}
+			defer f.Close()
+			manifestsByName[fmt.Sprintf("cert-manager-crl-%s-%s", binary.OS(), binary.Architecture())] = f
+		}
+	}
+
 	log.Printf("Pushing arch-specific docker images")
 	for name, tars := range rel.ComponentImageBundles {
 		log.Printf("Pushing release images for component %q", name)
@@ -267,7 +280,7 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 
 	log.Printf("Creating multi-arch manifest lists for UBI image components")
 	for name, tars := range rel.UBIImageBundles {
-		manifestListName := buildManifestListName(o.PublishedImageRepository, name, rel.ReleaseVersion + "-ubi")
+		manifestListName := buildManifestListName(o.PublishedImageRepository, name, rel.ReleaseVersion+"-ubi")
 		if err := registry.CreateManifestList(manifestListName, tars); err != nil {
 			return err
 		}
@@ -328,6 +341,19 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 
 	log.Printf("Uploading %d release manifests to GitHub release", len(rel.YAMLs))
 	for name, f := range manifestsByName {
+		asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
+			Name: name,
+		}, f)
+		if err != nil {
+			return fmt.Errorf("failed to upload github release asset: %v", err)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			return fmt.Errorf("unexpected response code when uploading github release asset %d", resp.StatusCode)
+		}
+		log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
+	}
+
+	for name, f := range ctlBinariesByName {
 		asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
 			Name: name,
 		}, f)
