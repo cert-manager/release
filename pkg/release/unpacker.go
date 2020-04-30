@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cert-manager/release/pkg/release/binaries"
 	"github.com/cert-manager/release/pkg/release/images"
 	"github.com/cert-manager/release/pkg/release/manifests"
 	"github.com/cert-manager/release/pkg/release/tar"
@@ -41,6 +42,7 @@ type Unpacked struct {
 	GitCommitRef          string
 	Charts                []manifests.Chart
 	YAMLs                 []manifests.YAML
+	CtlBinaries           map[string][]binaries.File
 	ComponentImageBundles map[string][]images.Tar
 	UBIImageBundles       map[string][]images.Tar
 }
@@ -97,12 +99,18 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 		return nil, err
 	}
 
+	ctlBinaries, err := unpackCtlBinariesFromRelease(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+
 	log.Printf("Extracted %d component bundles from images archive", len(bundles))
 	return &Unpacked{
 		ReleaseVersion:        s.Metadata().ReleaseVersion,
 		GitCommitRef:          s.Metadata().GitCommitRef,
 		YAMLs:                 yamls,
 		Charts:                charts,
+		CtlBinaries:           ctlBinaries,
 		ComponentImageBundles: bundles,
 		UBIImageBundles:       ubiBundles,
 	}, nil
@@ -124,6 +132,39 @@ func unpackUBIImagesFromRelease(ctx context.Context, s *Staged) (map[string][]im
 	log.Printf("Unpacking 'ubi' type artifacts")
 	ubiA := s.ArtifactsOfKind("ubi")
 	return unpackImages(ctx, ubiA, "-ubi")
+}
+
+// unpackCtlBinariesFromRelease will extract all ctl binary tar archives
+// from the various 'ctl' .tar.gz files and return a map of component name
+// to a slice of binaries.Tar for each image in the bundle.
+func unpackCtlBinariesFromRelease(ctx context.Context, s *Staged) (map[string][]binaries.File, error) {
+	log.Printf("Unpacking 'ctl' type artifacts")
+	ctlA := s.ArtifactsOfKind("ctl")
+
+	// binaryBundles is a map from component name to slices of binaries.File
+	binaryBundles := make(map[string][]binaries.File)
+	for _, a := range ctlA {
+		dir, err := extractStagedArtifactToTempDir(ctx, &a)
+		if err != nil {
+			return nil, err
+		}
+		binaryArchives, err := recursiveFindWithName(dir, "cert-manager-ctl")
+		if err != nil {
+			return nil, err
+		}
+		for _, archive := range binaryArchives {
+			imageTar, err := binaries.NewFile(archive, a.Metadata.OS, a.Metadata.Architecture)
+			if err != nil {
+				return nil, fmt.Errorf("failed to inspect tar at path %q: %w", archive, err)
+			}
+
+			baseName := filepath.Base(archive)
+			componentName := baseName[:len(baseName)-len(filepath.Ext(baseName))]
+			log.Printf("Found ctl binary for component %q with", componentName)
+			binaryBundles[componentName] = append(binaryBundles[componentName], *imageTar)
+		}
+	}
+	return binaryBundles, nil
 }
 
 func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix string) (map[string][]images.Tar, error) {
@@ -165,6 +206,28 @@ func recursiveFindWithExt(path, ext string) ([]string, error) {
 			return nil
 		}
 		if filepath.Ext(path) != ext {
+			return nil
+		}
+		paths = append(paths, path)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	return paths, nil
+}
+
+// recursiveFindWithName will recursively Walk a directory searching for files
+// that have the given name and return their path.
+func recursiveFindWithName(path, name string) ([]string, error) {
+	var paths []string
+	if err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if info.Name() != name {
 			return nil
 		}
 		paths = append(paths, path)
