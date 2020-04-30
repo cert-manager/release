@@ -141,8 +141,8 @@ func unpackCtlBinariesFromRelease(ctx context.Context, s *Staged) (map[string][]
 	log.Printf("Unpacking 'ctl' type artifacts")
 	ctlA := s.ArtifactsOfKind("ctl")
 
-	// tarBundles is a map from component name to slices of images.Tar
-	tarBundles := make(map[string][]binaries.File)
+	// binaryBundles is a map from component name to slices of binaries.File
+	binaryBundles := make(map[string][]binaries.File)
 	for _, a := range ctlA {
 		dir, err := extractStagedArtifactToTempDir(ctx, &a)
 		if err != nil {
@@ -161,10 +161,10 @@ func unpackCtlBinariesFromRelease(ctx context.Context, s *Staged) (map[string][]
 			baseName := filepath.Base(archive)
 			componentName := baseName[:len(baseName)-len(filepath.Ext(baseName))]
 			log.Printf("Found ctl binary for component %q with", componentName)
-			tarBundles[componentName] = append(tarBundles[componentName], *imageTar)
+			binaryBundles[componentName] = append(binaryBundles[componentName], *imageTar)
 		}
 	}
-	return tarBundles, nil
+	return binaryBundles, nil
 }
 
 func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix string) (map[string][]images.Tar, error) {
