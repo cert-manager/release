@@ -42,7 +42,7 @@ type Unpacked struct {
 	GitCommitRef          string
 	Charts                []manifests.Chart
 	YAMLs                 []manifests.YAML
-	CtlBinaries           map[string][]binaries.Tar
+	CtlBinaries           map[string][]binaries.File
 	ComponentImageBundles map[string][]images.Tar
 	UBIImageBundles       map[string][]images.Tar
 }
@@ -137,23 +137,23 @@ func unpackUBIImagesFromRelease(ctx context.Context, s *Staged) (map[string][]im
 // unpackCtlBinariesFromRelease will extract all ctl binary tar archives
 // from the various 'ctl' .tar.gz files and return a map of component name
 // to a slice of binaries.Tar for each image in the bundle.
-func unpackCtlBinariesFromRelease(ctx context.Context, s *Staged) (map[string][]binaries.Tar, error) {
+func unpackCtlBinariesFromRelease(ctx context.Context, s *Staged) (map[string][]binaries.File, error) {
 	log.Printf("Unpacking 'ctl' type artifacts")
 	ctlA := s.ArtifactsOfKind("ctl")
 
 	// tarBundles is a map from component name to slices of images.Tar
-	tarBundles := make(map[string][]binaries.Tar)
+	tarBundles := make(map[string][]binaries.File)
 	for _, a := range ctlA {
 		dir, err := extractStagedArtifactToTempDir(ctx, &a)
 		if err != nil {
 			return nil, err
 		}
-		imageArchives, err := recursiveFindWithName(dir, "cert-manager-ctl")
+		binaryArchives, err := recursiveFindWithName(dir, "cert-manager-ctl")
 		if err != nil {
 			return nil, err
 		}
-		for _, archive := range imageArchives {
-			imageTar, err := binaries.NewTar(archive, a.Metadata.OS, a.Metadata.Architecture)
+		for _, archive := range binaryArchives {
+			imageTar, err := binaries.NewFile(archive, a.Metadata.OS, a.Metadata.Architecture)
 			if err != nil {
 				return nil, fmt.Errorf("failed to inspect tar at path %q: %w", archive, err)
 			}

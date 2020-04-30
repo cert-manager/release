@@ -141,8 +141,7 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 	// This will mean we don't have to update this release tool whenever we add an additional
 	// release artifact.
 
-	// hardcoded 'linux' for docker image builds
-	allOSes := sets.NewString(append(platformMapKeys(release.ClientPlatforms), "linux")...)
+	allOSes := sets.NewString(append(append(platformMapKeys(release.ClientPlatforms), platformMapKeys(release.ServerPlatforms)...), platformMapKeys(release.UBIPlatforms)...)...)
 	for _, osVariant := range allOSes.List() {
 		for _, arch := range release.ArchitecturesPerOS[osVariant] {
 			log.Printf("Building %q target for %q OS for %q architecture", release.TarsBazelTarget, osVariant, arch)
@@ -153,20 +152,24 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 	}
 
 	var artifacts []release.ArtifactMetadata
-	for _, arch := range release.ServerArchitectures {
-		// create an artifact for the arch specific 'server' release tarball
-		artifactName := fmt.Sprintf("cert-manager-server-linux-%s.tar.gz", arch)
-		// Add the arch-specific .tar.gz file to the list of artifacts
-		if err := appendArtifact(&artifacts, o.RepoPath, artifactName, "linux", arch); err != nil {
-			return err
+	for osVariant, archs := range release.ServerPlatforms {
+		for _, arch := range archs {
+			// create an artifact for the arch specific 'server' release tarball
+			artifactName := fmt.Sprintf("cert-manager-server-linux-%s.tar.gz", arch)
+			// Add the arch-specific .tar.gz file to the list of artifacts
+			if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
+				return err
+			}
 		}
 	}
-	for _, arch := range release.UBIArchitectures {
-		// create an artifact for the arch specific 'server' release tarball
-		artifactName := fmt.Sprintf("cert-manager-ubi-linux-%s.tar.gz", arch)
-		// Add the arch-specific .tar.gz file to the list of artifacts
-		if err := appendArtifact(&artifacts, o.RepoPath, artifactName, "linux", arch); err != nil {
-			return err
+	for osVariant, archs := range release.UBIPlatforms {
+		for _, arch := range archs {
+			// create an artifact for the arch specific 'server' release tarball
+			artifactName := fmt.Sprintf("cert-manager-ubi-linux-%s.tar.gz", arch)
+			// Add the arch-specific .tar.gz file to the list of artifacts
+			if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
+				return err
+			}
 		}
 	}
 	for osVariant, archs := range release.ClientPlatforms {

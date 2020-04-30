@@ -70,15 +70,19 @@ const (
 )
 
 var (
-	// ServerArchitectures is the list of architectures to build docker images
+	// ServerPlatforms is the list of OSes and architectures to build docker images
 	// for during the release.
 	// This is used to drive the `--platforms` flag passed to 'bazel build' as
 	// well as to determine which image artifacts should be uploaded.
-	ServerArchitectures = []string{"amd64", "arm", "arm64", "ppc64le", "s390x"}
+	ServerPlatforms = map[string][]string{
+		"linux": []string{"amd64", "arm", "arm64", "ppc64le", "s390x"},
+	}
 
-	// UBIArchitectures is defined separately as there is no 'arm' variant of
+	// UBIPlatforms is defined separately as there is no 'arm' variant of
 	// the UBI8 base image.
-	UBIArchitectures = []string{"amd64", "arm64", "ppc64le", "s390x"}
+	UBIPlatforms = map[string][]string{
+		"linux": []string{"amd64", "arm64", "ppc64le", "s390x"},
+	}
 
 	// ClientPlatforms is the list of OSes and architectures to build client CLI tools
 	// for during the release.
