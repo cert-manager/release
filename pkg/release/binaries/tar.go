@@ -16,32 +16,32 @@ limitations under the License.
 
 package binaries
 
-// Tar is used for accessing and interacting with a binary file stored on disk.
-type File struct {
-	// path is the path to the tar file containing the image on disk.
+// Tar is used for accessing and interacting with a tar wth a binary file stored on disk.
+type Tar struct {
+	// path is the path to the tar file containing the binary on disk.
 	path string
 
-	// os and arch of the image. This must be provided at instantiation time
+	// os and arch of the binary. This must be provided at instantiation time
 	// and cannot be determined by inspecting the tar file.
 	os, arch string
 }
 
-func NewFile(path, osStr, arch string) (*File, error) {
-	return &File{
+func NewFile(path, osStr, arch string) (*Tar, error) {
+	return &Tar{
 		path: path,
 		os:   osStr,
 		arch: arch,
 	}, nil
 }
 
-func (i *File) Filepath() string {
+func (i *Tar) Filepath() string {
 	return i.path
 }
 
-func (i *File) OS() string {
+func (i *Tar) OS() string {
 	return i.os
 }
 
-func (i *File) Architecture() string {
+func (i *Tar) Architecture() string {
 	return i.arch
 }

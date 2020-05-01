@@ -225,9 +225,9 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 		manifestsByName[filepath.Base(manifest.Path())] = f
 	}
 
-	// open ctl binary files ahead of time to ensure they are available on disk
+	// open ctl binary tar files ahead of time to ensure they are available on disk
 	ctlBinariesByName := map[string]*os.File{}
-	for _, files := range rel.CtlBinaries {
+	for _, files := range rel.CtlBinaryBundles {
 		for _, binary := range files {
 			f, err := os.Open(binary.Filepath())
 			if err != nil {
