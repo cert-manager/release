@@ -168,15 +168,6 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 		}
 	}
 
-	for name, tars := range rel.UBIImageBundles {
-		log.Printf("Loading UBI release images for component %q into local docker daemon...", name)
-		for _, t := range tars {
-			if err := docker.Load(t.Filepath()); err != nil {
-				return err
-			}
-		}
-	}
-
 	if !o.NoMock {
 		log.Printf("--nomock flag set to false, skipping actually publishing the release")
 		return nil
@@ -259,28 +250,6 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("Creating multi-arch manifest lists for image components")
 	for name, tars := range rel.ComponentImageBundles {
 		manifestListName := buildManifestListName(o.PublishedImageRepository, name, rel.ReleaseVersion)
-		if err := registry.CreateManifestList(manifestListName, tars); err != nil {
-			return err
-		}
-		builtManifestLists = append(builtManifestLists, manifestListName)
-	}
-
-	log.Printf("Pushing arch-specific UBI docker images")
-	for name, tars := range rel.UBIImageBundles {
-		log.Printf("Pushing UBI release images for component %q", name)
-		for _, t := range tars {
-			if err := docker.Push(t.ImageName()); err != nil {
-				return err
-			}
-			log.Printf("Pushed UBI release image %q", t.ImageName())
-			// Wait 2 seconds to avoid being rate limited by the registry.
-			time.Sleep(time.Second * 2)
-		}
-	}
-
-	log.Printf("Creating multi-arch manifest lists for UBI image components")
-	for name, tars := range rel.UBIImageBundles {
-		manifestListName := buildManifestListName(o.PublishedImageRepository, name, rel.ReleaseVersion+"-ubi")
 		if err := registry.CreateManifestList(manifestListName, tars); err != nil {
 			return err
 		}

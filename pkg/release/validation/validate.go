@@ -37,12 +37,6 @@ type Options struct {
 func ValidateUnpackedRelease(opts Options, rel *release.Unpacked) ([]string, error) {
 	var violations []string
 	violations = append(violations, validateImageBundles(rel.ComponentImageBundles, opts)...)
-	ubiOptions := Options{
-		// append '-ubi' to the release version
-		ReleaseVersion:  opts.ReleaseVersion + "-ubi",
-		ImageRepository: opts.ImageRepository,
-	}
-	violations = append(violations, validateImageBundles(rel.UBIImageBundles, ubiOptions)...)
 	for _, ch := range rel.Charts {
 		if ch.Version() != opts.ReleaseVersion {
 			violations = append(violations, fmt.Sprintf("Helm chart sets 'version' to %q, expected %q", ch.Version(), opts.ReleaseVersion))
