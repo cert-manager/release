@@ -218,15 +218,13 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 
 	// open ctl binary tar files ahead of time to ensure they are available on disk
 	ctlBinariesByName := map[string]*os.File{}
-	for _, files := range rel.CtlBinaryBundles {
-		for _, binary := range files {
-			f, err := os.Open(binary.Filepath())
-			if err != nil {
-				return fmt.Errorf("failed to open manifest file to be uploaded: %v", err)
-			}
-			defer f.Close()
-			ctlBinariesByName[fmt.Sprintf("kubectl-cert_manager-%s-%s.tar.gz", binary.OS(), binary.Architecture())] = f
+	for _, binaryTar := range rel.CtlBinaryBundles {
+		f, err := os.Open(binaryTar.Filepath())
+		if err != nil {
+			return fmt.Errorf("failed to open manifest file to be uploaded: %v", err)
 		}
+		defer f.Close()
+		ctlBinariesByName[fmt.Sprintf("kubectl-cert_manager-%s-%s.tar.gz", binaryTar.OS(), binaryTar.Architecture())] = f
 	}
 
 	log.Printf("Pushing arch-specific docker images")
@@ -308,7 +306,7 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 		return fmt.Errorf("unexpected response code when creating GitHub release %d", resp.StatusCode)
 	}
 
-	log.Printf("Uploading %d release manifests to GitHub release", len(rel.YAMLs))
+	log.Printf("Uploading %d release manifests to GitHub release", len(manifestsByName))
 	for name, f := range manifestsByName {
 		asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
 			Name: name,
@@ -322,6 +320,7 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 		log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
 	}
 
+	log.Printf("Uploading %d release binary tars to GitHub release", len(ctlBinariesByName))
 	for name, f := range ctlBinariesByName {
 		asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
 			Name: name,

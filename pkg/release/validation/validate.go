@@ -45,6 +45,9 @@ func ValidateUnpackedRelease(opts Options, rel *release.Unpacked) ([]string, err
 			violations = append(violations, fmt.Sprintf("Helm chart sets 'appVersion' to %q, expected %q", ch.AppVersion(), opts.ReleaseVersion))
 		}
 	}
+	if len(rel.CtlBinaryBundles) == 0 {
+		violations = append(violations, fmt.Sprintf("No kubectl plugin binaries found in release - this is probably an error!"))
+	}
 	return violations, nil
 }
 
