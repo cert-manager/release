@@ -69,6 +69,9 @@ type gcbStageOptions struct {
 	// This must be set at the time a build is staged as parts of the release
 	// incorporate this docker repository name.
 	PublishedImageRepository string
+
+	// SkipPush, if true, will skip pushing the staged release to a GCS bucket.
+	SkipPush bool
 }
 
 func (o *gcbStageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
@@ -76,6 +79,7 @@ func (o *gcbStageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) 
 	fs.StringVar(&o.RepoPath, "repo-path", "", "Path to the cert-manager repository stored in disk to be built and published. This must already be checked out at the appropriate revision.")
 	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Optional release version override used to force the version strings used during the release to a specific value.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository set when building the release.")
+	fs.BoolVar(&o.SkipPush, "skip-push", false, "Skip pushing the staged release to a GCS bucket.")
 }
 
 func (o *gcbStageOptions) print() {
@@ -177,7 +181,21 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 		return err
 	}
 
+	meta, err := json.MarshalIndent(release.Metadata{
+		ReleaseVersion: o.ReleaseVersion,
+		GitCommitRef:   gitRef,
+		Artifacts:      artifacts,
+	}, "", " ")
+	if err != nil {
+		return fmt.Errorf("failed to encode metadata output: %w", err)
+	}
+
 	log.Printf("Built release artifacts for all architectures: %v", artifacts)
+
+	if o.SkipPush {
+		log.Printf("Skipping pushing staged release as --skip-push=true")
+		return nil
+	}
 
 	// Build Google Cloud Storage API client for uploading artifacts
 	ctx := context.Background()
@@ -211,15 +229,6 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 		}(filePath, gcsPath); err != nil {
 			return fmt.Errorf("failed to copy output artifact to GCS staging location: %w", err)
 		}
-	}
-
-	meta, err := json.MarshalIndent(release.Metadata{
-		ReleaseVersion: o.ReleaseVersion,
-		GitCommitRef:   gitRef,
-		Artifacts:      artifacts,
-	}, "", " ")
-	if err != nil {
-		return fmt.Errorf("failed to encode metadata output: %w", err)
 	}
 
 	log.Printf("Uploading release metadata")
