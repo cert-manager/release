@@ -78,12 +78,6 @@ var (
 		"linux": []string{"amd64", "arm", "arm64", "ppc64le", "s390x"},
 	}
 
-	// UBIPlatforms is defined separately as there is no 'arm' variant of
-	// the UBI8 base image.
-	UBIPlatforms = map[string][]string{
-		"linux": []string{"amd64", "arm64", "ppc64le", "s390x"},
-	}
-
 	// ClientPlatforms is the list of OSes and architectures to build client CLI tools
 	// for during the release.
 	// This is used to determine which artifacts should be uploaded.

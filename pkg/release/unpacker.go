@@ -44,7 +44,6 @@ type Unpacked struct {
 	YAMLs                 []manifests.YAML
 	CtlBinaryBundles      map[string][]binaries.Tar
 	ComponentImageBundles map[string][]images.Tar
-	UBIImageBundles       map[string][]images.Tar
 }
 
 // Unpack takes a staged release, inspects its metadata, fetches referenced
@@ -94,11 +93,6 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 		return nil, err
 	}
 
-	ubiBundles, err := unpackUBIImagesFromRelease(ctx, s)
-	if err != nil {
-		return nil, err
-	}
-
 	ctlBinaryBundles, err := unpackCtlFromRelease(ctx, s)
 	if err != nil {
 		return nil, err
@@ -112,7 +106,6 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 		Charts:                charts,
 		CtlBinaryBundles:      ctlBinaryBundles,
 		ComponentImageBundles: bundles,
-		UBIImageBundles:       ubiBundles,
 	}, nil
 }
 
@@ -123,15 +116,6 @@ func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][
 	log.Printf("Unpacking 'server' type artifacts")
 	serverA := s.ArtifactsOfKind("server")
 	return unpackImages(ctx, serverA, "")
-}
-
-// unpackUBIImagesFromRelease will extract all 'image-like' tar archives
-// from the various 'server' .tar.gz files and return a map of component name
-// to a slice of images.Tar for each image in the bundle.
-func unpackUBIImagesFromRelease(ctx context.Context, s *Staged) (map[string][]images.Tar, error) {
-	log.Printf("Unpacking 'ubi' type artifacts")
-	ubiA := s.ArtifactsOfKind("ubi")
-	return unpackImages(ctx, ubiA, "-ubi")
 }
 
 // unpackCtlFromRelease will extract all ctl tar archives
