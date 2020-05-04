@@ -169,7 +169,7 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 	for osVariant, archs := range release.ClientPlatforms {
 		for _, arch := range archs {
 			// create an artifact for the os and arch specific 'ctl' release tarball
-			artifactName := fmt.Sprintf("cert-manager-ctl-%s-%s.tar.gz", osVariant, arch)
+			artifactName := fmt.Sprintf("cert-manager-kubectl-cert_manager-%s-%s.tar.gz", osVariant, arch)
 			// Add the arch-specific .tar.gz file to the list of artifacts
 			if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
 				return err

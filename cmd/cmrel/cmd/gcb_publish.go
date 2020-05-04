@@ -225,7 +225,7 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 				return fmt.Errorf("failed to open manifest file to be uploaded: %v", err)
 			}
 			defer f.Close()
-			ctlBinariesByName[fmt.Sprintf("cert-manager-ctl-%s-%s", binary.OS(), binary.Architecture())] = f
+			ctlBinariesByName[fmt.Sprintf("kubectl-cert_manager-%s-%s.tar.gz", binary.OS(), binary.Architecture())] = f
 		}
 	}
 
