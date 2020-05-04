@@ -42,7 +42,7 @@ type Unpacked struct {
 	GitCommitRef          string
 	Charts                []manifests.Chart
 	YAMLs                 []manifests.YAML
-	CtlBinaryBundles      map[string][]binaries.Tar
+	CtlBinaryBundles      []binaries.Tar
 	ComponentImageBundles map[string][]images.Tar
 }
 
@@ -92,13 +92,14 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Extracted %d component bundles from images archive", len(bundles))
 
 	ctlBinaryBundles, err := unpackCtlFromRelease(ctx, s)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf("Extracted %d multi arch ctl bundles from kubectl-cert_manager archives", len(ctlBinaryBundles))
 
-	log.Printf("Extracted %d component bundles from images archive", len(bundles))
 	return &Unpacked{
 		ReleaseVersion:        s.Metadata().ReleaseVersion,
 		GitCommitRef:          s.Metadata().GitCommitRef,
@@ -121,31 +122,28 @@ func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][
 // unpackCtlFromRelease will extract all ctl tar archives
 // from the various 'ctl' .tar.gz files and return a map of component name
 // to a slice of binaries.Tar for each image in the bundle.
-func unpackCtlFromRelease(ctx context.Context, s *Staged) (map[string][]binaries.Tar, error) {
+func unpackCtlFromRelease(ctx context.Context, s *Staged) ([]binaries.Tar, error) {
 	log.Printf("Unpacking 'kubectl-cert_manager' type artifacts")
 	ctlA := s.ArtifactsOfKind("kubectl-cert_manager")
 
 	// binaryBundles is a map from component name to slices of binaries.File
-	binaryTarBundles := make(map[string][]binaries.Tar)
+	var binaryTarBundles []binaries.Tar
 	for _, a := range ctlA {
 		dir, err := extractStagedArtifactToTempDir(ctx, &a)
 		if err != nil {
 			return nil, err
 		}
-		binaryArchives, err := recursiveFindWithExt(dir, ".tar.gz")
+		binaryArchives, err := recursiveFindWithExt(dir, ".gz")
 		if err != nil {
 			return nil, err
 		}
 		for _, archive := range binaryArchives {
-			imageTar, err := binaries.NewFile(archive, a.Metadata.OS, a.Metadata.Architecture)
+			binaryTar, err := binaries.NewFile(archive, a.Metadata.OS, a.Metadata.Architecture)
 			if err != nil {
 				return nil, fmt.Errorf("failed to inspect tar at path %q: %w", archive, err)
 			}
-
-			baseName := filepath.Base(archive)
-			componentName := baseName[:len(baseName)-len(filepath.Ext(baseName))]
-			log.Printf("Found kubectl-cert_manager tar for component %q with", componentName)
-			binaryTarBundles[componentName] = append(binaryTarBundles[componentName], *imageTar)
+			log.Printf("Found kubectl-cert_manager binary tar for os=%s, arch=%s", binaryTar.OS(), binaryTar.Architecture())
+			binaryTarBundles = append(binaryTarBundles, *binaryTar)
 		}
 	}
 	return binaryTarBundles, nil
