@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	cloud.google.com/go/storage v1.5.0
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/ghodss/yaml v0.0.0-20150909031657-73d445a93680
 	github.com/google/go-github/v29 v29.0.2
 	github.com/google/martian v2.1.0+incompatible

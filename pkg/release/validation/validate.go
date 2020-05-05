@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/blang/semver"
+
 	"github.com/cert-manager/release/pkg/release"
 	"github.com/cert-manager/release/pkg/release/images"
 )
@@ -36,6 +38,9 @@ type Options struct {
 
 func ValidateUnpackedRelease(opts Options, rel *release.Unpacked) ([]string, error) {
 	var violations []string
+	if err := validateSemver(rel.ReleaseVersion); err != nil {
+		violations = append(violations, fmt.Sprintf("Release version %q is not semver compliant: %v", rel.ReleaseVersion, err))
+	}
 	violations = append(violations, validateImageBundles(rel.ComponentImageBundles, opts)...)
 	for _, ch := range rel.Charts {
 		if ch.Version() != opts.ReleaseVersion {
@@ -49,6 +54,17 @@ func ValidateUnpackedRelease(opts Options, rel *release.Unpacked) ([]string, err
 		violations = append(violations, fmt.Sprintf("No kubectl plugin binaries found in release - this is probably an error!"))
 	}
 	return violations, nil
+}
+
+func validateSemver(v string) error {
+	if v[0] != 'v' {
+		return fmt.Errorf("version number must have a leading 'v' character")
+	}
+	// trim v prefix as the semver library only offers ParseTolerant
+	// which is not sufficient for us
+	v = strings.TrimPrefix(v, "v")
+	_, err := semver.Parse(v)
+	return err
 }
 
 func validateImageBundles(bundles map[string][]images.Tar, opts Options) []string {
