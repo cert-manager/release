@@ -44,7 +44,7 @@ type Unpacked struct {
 	Charts                []manifests.Chart
 	YAMLs                 []manifests.YAML
 	CtlBinaryBundles      []binaries.Tar
-	ComponentImageBundles map[string][]images.Tar
+	ComponentImageBundles map[string][]images.TarInterface
 }
 
 // Unpack takes a staged release, inspects its metadata, fetches referenced
@@ -115,7 +115,7 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 // unpackServerImagesFromRelease will extract all 'image-like' tar archives
 // from the various 'server' .tar.gz files and return a map of component name
 // to a slice of images.Tar for each image in the bundle.
-func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][]images.Tar, error) {
+func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][]images.TarInterface, error) {
 	log.Printf("Unpacking 'server' type artifacts")
 	serverA := s.ArtifactsOfKind("server")
 	return unpackImages(ctx, serverA, "")
@@ -151,9 +151,9 @@ func unpackCtlFromRelease(ctx context.Context, s *Staged) ([]binaries.Tar, error
 	return binaryTarBundles, nil
 }
 
-func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix string) (map[string][]images.Tar, error) {
+func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix string) (map[string][]images.TarInterface, error) {
 	// tarBundles is a map from component name to slices of images.Tar
-	tarBundles := make(map[string][]images.Tar)
+	tarBundles := make(map[string][]images.TarInterface)
 	for _, a := range artifacts {
 		dir, err := extractStagedArtifactToTempDir(ctx, &a)
 		if err != nil {
@@ -172,7 +172,7 @@ func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix st
 			baseName := filepath.Base(archive)
 			componentName := strings.TrimSuffix(baseName[:len(baseName)-len(filepath.Ext(baseName))], trimSuffix)
 			log.Printf("Found image for component %q with name %q", componentName, imageTar.ImageName())
-			tarBundles[componentName] = append(tarBundles[componentName], *imageTar)
+			tarBundles[componentName] = append(tarBundles[componentName], imageTar)
 		}
 	}
 	return tarBundles, nil

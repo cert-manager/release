@@ -44,6 +44,15 @@ type Tar struct {
 	imageArchitecture string
 }
 
+type TarInterface interface {
+	Architecture() string
+	ImageArchitecture() string
+	ImageName() string
+	ImageTag() string
+	Filepath() string
+	OS() string
+}
+
 func NewTar(path, osStr, arch string) (*Tar, error) {
 	f, err := os.Open(path)
 	if err != nil {

@@ -27,7 +27,7 @@ func Push(image images.Tar) error {
 	return docker.Push(image.ImageName())
 }
 
-func CreateManifestList(name string, tars []images.Tar) error {
+func CreateManifestList(name string, tars []images.TarInterface) error {
 	imageNames := make([]string, len(tars))
 	for i, t := range tars {
 		imageNames[i] = t.ImageName()

@@ -20,11 +20,19 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/cert-manager/release/pkg/release/images"
+
 	"github.com/blang/semver"
 
 	"github.com/cert-manager/release/pkg/release"
-	"github.com/cert-manager/release/pkg/release/images"
 )
+
+type tarImage interface {
+	Architecture() string
+	ImageArchitecture() string
+	ImageName() string
+	ImageTag() string
+}
 
 type Options struct {
 	// ReleaseVersion is used to ensure that the artifacts in a staged release
@@ -67,7 +75,7 @@ func validateSemver(v string) error {
 	return err
 }
 
-func validateImageBundles(bundles map[string][]images.Tar, opts Options) []string {
+func validateImageBundles(bundles map[string][]images.TarInterface, opts Options) []string {
 	var violations []string
 	for componentName, tars := range bundles {
 		for _, tar := range tars {
