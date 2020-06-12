@@ -79,6 +79,12 @@ func validateImageBundles(bundles map[string][]images.Tar, opts Options) []strin
 			if tar.ImageTag() != opts.ReleaseVersion {
 				violations = append(violations, fmt.Sprintf("Image %q does not have expected tag %q", tar.ImageName(), opts.ReleaseVersion))
 			}
+
+			expectedArch := tar.Architecture()
+			actualArch := tar.ImageArchitecture()
+			if expectedArch != actualArch {
+				violations = append(violations, fmt.Sprintf("Image architecture %q does not match expected architecture %q", actualArch, expectedArch))
+			}
 		}
 	}
 	return violations

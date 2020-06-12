@@ -38,6 +38,10 @@ type Tar struct {
 	// imageName is the name of the image stored in the tar file, extracted by
 	// reading the manifest.json file in the archive.
 	imageName string
+
+	// imageArchitecture is the name of the architecture stored in the tar file, extracted by
+	// reading the manifest and config file in the archive.
+	imageArchitecture string
 }
 
 func NewTar(path, osStr, arch string) (*Tar, error) {
@@ -57,6 +61,7 @@ func NewTar(path, osStr, arch string) (*Tar, error) {
 	// metadata specification.
 	var metas = []struct {
 		RepoTags []string `json:"RepoTags"`
+		Config   string   `json:"Config"`
 	}{}
 	if err := json.Unmarshal(metaBytes, &metas); err != nil {
 		return nil, err
@@ -75,11 +80,28 @@ func NewTar(path, osStr, arch string) (*Tar, error) {
 		return nil, fmt.Errorf("found multiple image tag entries in image tar metadata.json file")
 	}
 	imageName := meta.RepoTags[0]
+
+	var config = struct {
+		Architecture string `json:"architecture"`
+	}{}
+	if meta.Config == "" {
+		return nil, fmt.Errorf("could not find any config entries in image tar metadata.json file")
+	}
+
+	configBytes, err := tar.ReadSingleFile(meta.Config, f)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(configBytes, &config); err != nil {
+		return nil, err
+	}
+
 	return &Tar{
-		path:      path,
-		os:        osStr,
-		arch:      arch,
-		imageName: imageName,
+		path:              path,
+		os:                osStr,
+		arch:              arch,
+		imageName:         imageName,
+		imageArchitecture: config.Architecture,
 	}, nil
 }
 
@@ -97,6 +119,10 @@ func (i *Tar) Architecture() string {
 
 func (i *Tar) ImageName() string {
 	return i.imageName
+}
+
+func (i *Tar) ImageArchitecture() string {
+	return i.imageArchitecture
 }
 
 func (i *Tar) ImageTag() string {
