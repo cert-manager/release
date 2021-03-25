@@ -51,7 +51,7 @@ substitutions:
   _RELEASE_VERSION: ""
   _RELEASE_BUCKET: ""
   _PUBLISHED_IMAGE_REPO: quay.io/jetstack
-  _BAZEL_VERSION: "3.3.1"
+  _BAZEL_VERSION: "3.7.2"
   ## Options controlling the version of the release tooling used in the build.
   _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
   _RELEASE_REPO_REF: "master"
