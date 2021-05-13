@@ -72,8 +72,8 @@ substitutions:
   ## Optional/defaulted parameters
   _RELEASE_BUCKET: ""
   ## Options controlling the version of the release tooling used in the build.
-  _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
-  _RELEASE_REPO_REF: "master"
+  _RELEASE_REPO_URL: https://github.com/wallrj/release.git
+  _RELEASE_REPO_REF: "3934-helm-github"
   _NO_MOCK: "false"
   _PUBLISHED_GITHUB_ORG: ""
   _PUBLISHED_GITHUB_REPO: ""
