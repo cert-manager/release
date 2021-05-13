@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/storage v1.14.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/ghodss/yaml v1.0.0
-	github.com/google/go-github/v29 v29.0.2
+	github.com/google/go-github/v35 v35.2.0
 	github.com/google/martian v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.1.3

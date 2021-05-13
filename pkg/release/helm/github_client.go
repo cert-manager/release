@@ -3,7 +3,7 @@ package helm
 import (
 	"context"
 
-	"github.com/google/go-github/v29/github"
+	"github.com/google/go-github/v35/github"
 )
 
 // GitHubClient provides the minimum necessary GitHub API client methods

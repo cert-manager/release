@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v29/github"
+	"github.com/google/go-github/v35/github"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 

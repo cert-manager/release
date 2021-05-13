@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 
-	"github.com/google/go-github/v29/github"
+	"github.com/google/go-github/v35/github"
 	"github.com/pkg/errors"
 	"k8s.io/utils/pointer"
 
