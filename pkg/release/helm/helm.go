@@ -84,8 +84,8 @@ func (o *gitHubRepositoryManager) Check(ctx context.Context) (err error) {
 	if !sets.NewString(scopes...).Has(string(github.ScopeRepo)) {
 		errs = append(errs, fmt.Errorf("expected scope %q, got %v", github.ScopeRepo, scopes))
 	}
-
-	perm, _, err := o.RepositoriesClient.GetPermissionLevel(ctx, o.owner, o.repo, user.GetLogin())
+	loginName := user.GetLogin()
+	perm, _, err := o.RepositoriesClient.GetPermissionLevel(ctx, o.owner, o.repo, loginName)
 	if err != nil {
 		var gitHubErr *github.ErrorResponse
 		if !errors.As(err, &gitHubErr) {
@@ -95,8 +95,9 @@ func (o *gitHubRepositoryManager) Check(ctx context.Context) (err error) {
 			errs = append(
 				errs,
 				fmt.Errorf(
-					"repo %q was not found or it is a private repo which is not accessible to you: %v",
+					"repo %q was not found or it is a private repo which is not accessible to user %q: %v",
 					o.destination(),
+					loginName,
 					err,
 				),
 			)
