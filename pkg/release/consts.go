@@ -83,7 +83,7 @@ var (
 	// This is used to determine which artifacts should be uploaded.
 	ClientPlatforms = map[string][]string{
 		"linux":   []string{"amd64", "arm", "arm64", "ppc64le", "s390x"},
-		"darwin":  []string{"amd64", "arm64"},
+		"darwin":  []string{"amd64"},
 		"windows": []string{"amd64"},
 	}
 
@@ -91,7 +91,7 @@ var (
 	// This is used to drive the `--platforms` flag passed to 'bazel build'
 	ArchitecturesPerOS = map[string][]string{
 		"linux":   []string{"amd64", "arm", "arm64", "ppc64le", "s390x"},
-		"darwin":  []string{"amd64", "arm64"},
+		"darwin":  []string{"amd64"},
 		"windows": []string{"amd64"},
 	}
 )
