@@ -68,19 +68,30 @@ func (o *gitHubRepositoryManager) Check(ctx context.Context) error {
 	var errs []error
 
 	// NB: Empty user means current logged in user
-	user, _, err := o.UsersClient.Get(ctx, "")
+	user, response, err := o.UsersClient.Get(ctx, "")
 	if err != nil {
-		return err
-	}
-
-	perm, response, err := o.RepositoriesClient.GetPermissionLevel(ctx, o.owner, o.repo, user.GetLogin())
-	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	scopes := response.Header.Get("X-Oauth-Scopes")
 	if scopes != string(github.ScopeRepo) {
 		errs = append(errs, fmt.Errorf("expected scope %q, got %q", github.ScopeRepo, scopes))
+	}
+
+	perm, _, err := o.RepositoriesClient.GetPermissionLevel(ctx, o.owner, o.repo, user.GetLogin())
+	if err != nil {
+		if response != nil && response.StatusCode == 404 {
+			errs = append(
+				errs,
+				fmt.Errorf(
+					"repo %q was not found or it is a private repo which is not accessible to you: %v",
+					o.destination(),
+					err,
+				),
+			)
+		} else {
+			return errors.WithStack(err)
+		}
 	}
 
 	actualPermission := perm.GetPermission()

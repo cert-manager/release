@@ -1,0 +1,38 @@
+#### SECURITY NOTICE ####
+# Google Cloud Build (GCB) supports the usage of secrets for build requests.
+# Secrets appear within GCB configs as base64-encoded strings.
+# These secrets are GCP Cloud KMS-encrypted and cannot be decrypted by any human or system
+# outside of GCP Cloud KMS for the GCP project this encrypted resource was created for.
+# Seeing the base64-encoded encrypted blob here is not a security event for the project.
+#
+# More details on using encrypted resources on Google Cloud Build can be found here:
+# https://cloud.google.com/cloud-build/docs/securing-builds/use-encrypted-secrets-credentials
+#
+# (Please do not remove this security notice.)
+steps:
+
+- name: gcr.io/cloud-builders/go
+  dir: "go/src/github.com/cert-manager/release"
+  entrypoint: sh
+  secretEnv:
+  - GITHUB_TOKEN
+  env:
+  - 'HELM_GITHUB_OWNER=jetstack'
+  - 'HELM_GITHUB_REPO=jetstack-charts'
+  - 'HELM_GITHUB_SOURCE_BRANCH=main'
+  args:
+  - -c
+  - |
+    set -e
+    git clone "${_RELEASE_REPO_URL}" . && git checkout "${_RELEASE_REPO_REF}"
+    go test -v ./pkg/release/helm/...
+
+substitutions:
+  _RELEASE_REPO_URL: https://github.com/wallrj/release.git
+  _RELEASE_REPO_REF: "3934-helm-github"
+
+secrets:
+- kmsKeyName: projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-secret-key
+  secretEnv:
+    GITHUB_TOKEN: CiQAPjqeE0LnlyMJdmLr+laf8RxSKjw/BOv8yiTzdi/RjN9IWh4SUQBQ4fbHZMFt3QlDxBvdU81a6r5LXT0pTTXWOuHQbctSsjc2BZCMROgI2wdRCEyTgj5XJ1YQS0kXaEfIucZrhUlMKsJPXt4ZaZkKtxv4RNPpQg==
+
