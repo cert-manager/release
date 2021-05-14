@@ -218,8 +218,8 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 		o.PublishedHelmChartGitHubRepo,
 		o.PublishedHelmChartGitHubBranch,
 	)
-	if err := helmRepo.Check(); err != nil {
-		return fmt.Errorf("error building Helm GitHub repository manager: %w", err)
+	if err := helmRepo.Check(ctx); err != nil {
+		return fmt.Errorf("error in preflight checks for Helm GitHub repository: %v", err)
 	}
 
 	// TODO: perform check to ensure we have permission to create releases

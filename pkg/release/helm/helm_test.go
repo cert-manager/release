@@ -14,7 +14,7 @@ import (
 	"github.com/cert-manager/release/pkg/release/manifests"
 )
 
-// TestPublishIntegration is designed to be run manually to test the
+// TestIntegration is designed to be run manually to test the
 // GitHubRepositoryManager.Publish function with a real GitHub repository.
 // You will need a GitHub personal access token with at least `repo` scope,
 // and the associated user must have permission to create branches and PRs in
@@ -26,7 +26,7 @@ import (
 // export HELM_GITHUB_OWNER=wallrj
 // export HELM_GITHUB_REPO=my-charts
 // export HELM_GITHUB_SOURCE_BRANCH=main
-func TestPublishIntegration(t *testing.T) {
+func TestIntegration(t *testing.T) {
 
 	ctx := context.TODO()
 
@@ -56,23 +56,31 @@ func TestPublishIntegration(t *testing.T) {
 			GitClient:          githubClient.Git,
 			PullRequestClient:  githubClient.PullRequests,
 			RepositoriesClient: githubClient.Repositories,
+			UsersClient:        githubClient.Users,
 		},
 		config["HELM_GITHUB_OWNER"],
 		config["HELM_GITHUB_REPO"],
 		config["HELM_GITHUB_SOURCE_BRANCH"],
 	)
 
-	chart, err := manifests.NewChart("testdata/cert-manager-v0.1.0-test.1.tgz")
-	require.NoError(t, err)
-	fakeReleaseName := fmt.Sprintf("cert-manager-%s-%d", chart.Version(), time.Now().Unix())
+	t.Run("Check", func(t *testing.T) {
+		err := r.Check(ctx)
+		require.NoError(t, err)
+	})
 
-	prURL, err := r.Publish(ctx, fakeReleaseName, *chart)
-	require.NoError(t, err)
+	t.Run("Publish", func(t *testing.T) {
+		chart, err := manifests.NewChart("testdata/cert-manager-v0.1.0-test.1.tgz")
+		require.NoError(t, err)
+		fakeReleaseName := fmt.Sprintf("cert-manager-%s-%d", chart.Version(), time.Now().Unix())
 
-	expectedURLPattern := fmt.Sprintf(
-		`https://github.com/%s/%s/pull/\d+`,
-		config["HELM_GITHUB_OWNER"],
-		config["HELM_GITHUB_REPO"],
-	)
-	require.Regexp(t, expectedURLPattern, prURL)
+		prURL, err := r.Publish(ctx, fakeReleaseName, *chart)
+		require.NoError(t, err)
+
+		expectedURLPattern := fmt.Sprintf(
+			`https://github.com/%s/%s/pull/\d+`,
+			config["HELM_GITHUB_OWNER"],
+			config["HELM_GITHUB_REPO"],
+		)
+		require.Regexp(t, expectedURLPattern, prURL)
+	})
 }
