@@ -76,10 +76,13 @@ func (o *gitHubRepositoryManager) Check(ctx context.Context) (err error) {
 	if err != nil {
 		return errors.WithStack(err)
 	}
+	scopes := strings.Split(response.Header.Get("X-Oauth-Scopes"), ",")
+	for i, scope := range scopes {
+		scopes[i] = strings.TrimSpace(scope)
+	}
 
-	scopes := response.Header.Get("X-Oauth-Scopes")
-	if scopes != string(github.ScopeRepo) {
-		errs = append(errs, fmt.Errorf("expected scope %q, got %q", github.ScopeRepo, scopes))
+	if !sets.NewString(scopes...).Has(string(github.ScopeRepo)) {
+		errs = append(errs, fmt.Errorf("expected scope %q, got %v", github.ScopeRepo, scopes))
 	}
 
 	perm, _, err := o.RepositoriesClient.GetPermissionLevel(ctx, o.owner, o.repo, user.GetLogin())
