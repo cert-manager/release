@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"strings"
 
 	"github.com/google/go-github/v35/github"
@@ -64,8 +65,11 @@ func NewGitHubRepositoryManager(client *GitHubClient, owner, repo, branch string
 // Requests the user associated with the current Oauth token and checks whether
 // that user has write permission to the configured repository and whether it
 // has the repo scope.
-func (o *gitHubRepositoryManager) Check(ctx context.Context) error {
+func (o *gitHubRepositoryManager) Check(ctx context.Context) (err error) {
 	var errs []error
+	defer func() {
+		err = errors.WithStack(utilerrors.NewAggregate(errs))
+	}()
 
 	// NB: Empty user means current logged in user
 	user, response, err := o.UsersClient.Get(ctx, "")
@@ -80,7 +84,11 @@ func (o *gitHubRepositoryManager) Check(ctx context.Context) error {
 
 	perm, _, err := o.RepositoriesClient.GetPermissionLevel(ctx, o.owner, o.repo, user.GetLogin())
 	if err != nil {
-		if response != nil && response.StatusCode == 404 {
+		var gitHubErr *github.ErrorResponse
+		if !errors.As(err, &gitHubErr) {
+			return errors.WithStack(err)
+		}
+		if gitHubErr.Response.StatusCode == http.StatusNotFound {
 			errs = append(
 				errs,
 				fmt.Errorf(
@@ -89,9 +97,8 @@ func (o *gitHubRepositoryManager) Check(ctx context.Context) error {
 					err,
 				),
 			)
-		} else {
-			return errors.WithStack(err)
 		}
+		return
 	}
 
 	actualPermission := perm.GetPermission()
@@ -106,7 +113,19 @@ func (o *gitHubRepositoryManager) Check(ctx context.Context) error {
 		)
 	}
 
-	return utilerrors.NewAggregate(errs)
+	// Verify that the given branch name can be resolved to a Git ref
+	_, _, err = o.GitClient.GetRef(ctx, o.owner, o.repo, fmt.Sprintf("refs/heads/%s", o.branch))
+	if err != nil {
+		var gitHubErr *github.ErrorResponse
+		if !errors.As(err, &gitHubErr) {
+			return errors.WithStack(err)
+		}
+		if gitHubErr.Response.StatusCode == http.StatusNotFound {
+			errs = append(errs, fmt.Errorf("branch %q not found: %v", o.branch, err))
+		}
+	}
+
+	return
 }
 
 // Publish is documented at RepositoryManager.Publish
