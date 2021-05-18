@@ -28,8 +28,8 @@ steps:
     go test -v ./pkg/release/helm/...
 
 substitutions:
-  _RELEASE_REPO_URL: https://github.com/wallrj/release.git
-  _RELEASE_REPO_REF: "3934-helm-github"
+  _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
+  _RELEASE_REPO_REF: "master"
 
 secrets:
 - kmsKeyName: projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-secret-key
