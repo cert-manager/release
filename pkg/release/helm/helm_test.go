@@ -37,7 +37,7 @@ func TestIntegration(t *testing.T) {
 		"HELM_GITHUB_SOURCE_BRANCH": "",
 	}
 
-	for key, _ := range config {
+	for key := range config {
 		val := os.Getenv(key)
 		if val == "" {
 			t.Skipf("%q environment variable not set", key)
