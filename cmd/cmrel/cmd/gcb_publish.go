@@ -19,20 +19,20 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/google/go-github/v29/github"
+	"github.com/google/go-github/v35/github"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"golang.org/x/oauth2"
 
 	"github.com/cert-manager/release/pkg/release"
 	"github.com/cert-manager/release/pkg/release/docker"
+	"github.com/cert-manager/release/pkg/release/helm"
 	"github.com/cert-manager/release/pkg/release/publish/registry"
 	"github.com/cert-manager/release/pkg/release/validation"
 )
@@ -68,9 +68,17 @@ type gcbPublishOptions struct {
 	// It is used as the repository for manifest lists created for artifacts.
 	PublishedImageRepository string
 
-	// PublishedHelmChartBucket is the name of the GCS bucket where published
-	// Helm charts should be stored.
-	PublishedHelmChartBucket string
+	// PublishedHelmChartGitHubOwner is the name of the owner of the GitHub repo
+	// for Helm charts.
+	PublishedHelmChartGitHubOwner string
+
+	// PublishedHelmChartGitHubRepo is the name of the GitHub repository for
+	// Helm charts.
+	PublishedHelmChartGitHubRepo string
+
+	// PublishedHelmChartGitHubBranch is the name of the main branch in the
+	// GitHub repository for Helm Charts.
+	PublishedHelmChartGitHubBranch string
 
 	// PublishedGitHubOrg is the org of the repository where the release will
 	// be published to.
@@ -86,7 +94,9 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.ReleaseName, "release-name", "", "Name of the staged release to publish.")
 	fs.BoolVar(&o.NoMock, "nomock", false, "Whether to actually publish the release. If false, the command will exit after preparing the release for pushing.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository to push the release images & manifest lists to.")
-	fs.StringVar(&o.PublishedHelmChartBucket, "published-helm-chart-bucket", release.DefaultHelmChartBucket, "The name of the GCS bucket where published Helm charts should be stored.")
+	fs.StringVar(&o.PublishedHelmChartGitHubOwner, "published-helm-chart-github-owner", release.DefaultHelmChartGitHubOwner, "The name of the owner of the GitHub repo for Helm charts.")
+	fs.StringVar(&o.PublishedHelmChartGitHubRepo, "published-helm-chart-github-repo", release.DefaultHelmChartGitHubRepo, "The name of the GitHub repo for Helm charts.")
+	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
 }
@@ -97,7 +107,9 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  ReleaseName: %q", o.ReleaseName)
 	log.Printf("  NoMock: %t", o.NoMock)
 	log.Printf("  PublishedImageRepo: %q", o.PublishedImageRepository)
-	log.Printf("  PublishedHelmChartBucket: %q", o.PublishedHelmChartBucket)
+	log.Printf("  PublishedHelmChartGitHubRepo: %q", o.PublishedHelmChartGitHubRepo)
+	log.Printf("  PublishedHelmChartGitHubOwner: %q", o.PublishedHelmChartGitHubOwner)
+	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
 }
@@ -182,17 +194,10 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("!!! Publishing release artifacts to public repositories !!!")
 	ctx := context.TODO()
 
-	// build required clients _first_ to try and avoid publishing partial
-	// releases due to permissions issues
-	gcs, err := storage.NewClient(ctx)
-	if err != nil {
-		return fmt.Errorf("error building GCS client: %w", err)
-	}
-	chartBucket := gcs.Bucket(o.PublishedHelmChartBucket)
-
-	// TODO: perform check to ensure we have permission to write to the bucket
-
 	// construct the GitHub API client
+	// The GITHUB_TOKEN must be a GitHub personal access token with at least
+	// `repo` privileges and the associated user must have permission to create
+	// branches and PRs at the Helm GitHub repository.
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	if githubToken == "" {
 		return fmt.Errorf("GITHUB_TOKEN environment variable not set - a token is always required to create a release")
@@ -202,6 +207,20 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 	)
 	tc := oauth2.NewClient(ctx, ts)
 	githubClient := github.NewClient(tc)
+
+	helmRepo := helm.NewGitHubRepositoryManager(
+		&helm.GitHubClient{
+			GitClient:          githubClient.Git,
+			PullRequestClient:  githubClient.PullRequests,
+			RepositoriesClient: githubClient.Repositories,
+		},
+		o.PublishedHelmChartGitHubOwner,
+		o.PublishedHelmChartGitHubRepo,
+		o.PublishedHelmChartGitHubBranch,
+	)
+	if err := helmRepo.Check(ctx); err != nil {
+		return fmt.Errorf("error in preflight checks for Helm GitHub repository: %v", err)
+	}
 
 	// TODO: perform check to ensure we have permission to create releases
 
@@ -263,28 +282,10 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 		log.Printf("Pushed multi-arch manifest list %q", manifestListName)
 	}
 
-	log.Printf("Pushing Helm chart(s) to release bucket")
-	for _, chart := range rel.Charts {
-		if err := func() error {
-			chartFileName := chart.PackageFileName()
-			log.Printf("Copying chart %q to release bucket gs://%s/", chartFileName, o.PublishedHelmChartBucket)
-			r, err := os.Open(chart.Path())
-			if err != nil {
-				return err
-			}
-			defer r.Close()
-			w := chartBucket.Object(chartFileName).NewWriter(ctx)
-			if _, err := io.Copy(w, r); err != nil {
-				return err
-			}
-			if err := w.Close(); err != nil {
-				return err
-			}
-			log.Printf("Copied chart %q to release bucket", chartFileName)
-			return nil
-		}(); err != nil {
-			return err
-		}
+	log.Printf("Pushing Helm chart(s)")
+	prURLForHelmCharts, err := helmRepo.Publish(ctx, rel.ReleaseName, rel.Charts...)
+	if err != nil {
+		return err
 	}
 
 	log.Printf("Creating a draft GitHub release %q in repository %s/%s", rel.ReleaseVersion, o.PublishedGitHubOrg, o.PublishedGitHubRepo)
@@ -335,7 +336,10 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 	}
 
 	log.Println()
-	log.Printf("+++++++++ Publishing release completed successfully! Please update the GitHub release with release notes and hit PUBLISH! +++++++++")
+	log.Printf("+++++++++ Publishing release completed successfully! +++++++++")
+	log.Printf("You MUST now perform the following manual tasks:")
+	log.Printf("* Update the GitHub release with release notes and hit PUBLISH!")
+	log.Printf("* Review and merge the GitHub PR containing the Helm charts: %s", prURLForHelmCharts)
 	return nil
 }
 

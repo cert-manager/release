@@ -38,6 +38,7 @@ import (
 // It provides methods to interact with the release in order to prepare it for
 // publishing.
 type Unpacked struct {
+	ReleaseName           string
 	ReleaseVersion        string
 	GitCommitRef          string
 	Charts                []manifests.Chart
@@ -101,6 +102,7 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 	log.Printf("Extracted %d multi arch ctl bundles from kubectl-cert_manager archives", len(ctlBinaryBundles))
 
 	return &Unpacked{
+		ReleaseName:           s.Name(),
 		ReleaseVersion:        s.Metadata().ReleaseVersion,
 		GitCommitRef:          s.Metadata().GitCommitRef,
 		YAMLs:                 yamls,

@@ -74,9 +74,17 @@ type publishOptions struct {
 	// It is used as the repository for manifest lists created for artifacts.
 	PublishedImageRepository string
 
-	// PublishedHelmChartBucket is the name of the GCS bucket where published
-	// Helm charts should be stored.
-	PublishedHelmChartBucket string
+	// PublishedHelmChartGitHubOwner is the name of the owner of the GitHub repo
+	// for Helm charts.
+	PublishedHelmChartGitHubOwner string
+
+	// PublishedHelmChartGitHubRepo is the name of the GitHub repository for
+	// Helm charts.
+	PublishedHelmChartGitHubRepo string
+
+	// PublishedHelmChartGitHubBranch is the name of the main branch in the
+	// GitHub repository for Helm Charts.
+	PublishedHelmChartGitHubBranch string
 
 	// PublishedGitHubOrg is the org of the repository where the release will
 	// be published to.
@@ -95,7 +103,9 @@ func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Project, "project", release.DefaultReleaseProject, "The GCP project to run the GCB build jobs in.")
 	fs.BoolVar(&o.NoMock, "nomock", false, "Whether to actually publish the release. If false, the command will exit after preparing the release for pushing.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository to push the release images & manifest lists to.")
-	fs.StringVar(&o.PublishedHelmChartBucket, "published-helm-chart-bucket", release.DefaultHelmChartBucket, "The name of the GCS bucket where published Helm charts should be stored.")
+	fs.StringVar(&o.PublishedHelmChartGitHubOwner, "published-helm-chart-github-owner", release.DefaultHelmChartGitHubOwner, "The name of the owner of the GitHub repo for Helm charts.")
+	fs.StringVar(&o.PublishedHelmChartGitHubRepo, "published-helm-chart-github-repo", release.DefaultHelmChartGitHubRepo, "The name of the GitHub repo for Helm charts.")
+	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
 }
@@ -108,7 +118,9 @@ func (o *publishOptions) print() {
 	log.Printf("  Project: %q", o.Project)
 	log.Printf("  NoMock: %t", o.NoMock)
 	log.Printf("  PublishedImageRepo: %q", o.PublishedImageRepository)
-	log.Printf("  PublishedHelmChartBucket: %q", o.PublishedHelmChartBucket)
+	log.Printf("  PublishedHelmChartGitHubRepo: %q", o.PublishedHelmChartGitHubRepo)
+	log.Printf("  PublishedHelmChartGitHubOwner: %q", o.PublishedHelmChartGitHubOwner)
+	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
 }
@@ -158,7 +170,9 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	build.Substitutions["_NO_MOCK"] = fmt.Sprintf("%t", o.NoMock)
 	build.Substitutions["_PUBLISHED_GITHUB_ORG"] = o.PublishedGitHubOrg
 	build.Substitutions["_PUBLISHED_GITHUB_REPO"] = o.PublishedGitHubRepo
-	build.Substitutions["_PUBLISHED_HELM_CHART_BUCKET"] = o.PublishedHelmChartBucket
+	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_OWNER"] = o.PublishedHelmChartGitHubOwner
+	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_REPO"] = o.PublishedHelmChartGitHubRepo
+	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_BRANCH"] = o.PublishedHelmChartGitHubBranch
 	build.Substitutions["_PUBLISHED_IMAGE_REPO"] = o.PublishedImageRepository
 
 	log.Printf("DEBUG: building google cloud build API client")
