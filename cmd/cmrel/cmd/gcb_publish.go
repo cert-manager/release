@@ -213,6 +213,7 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 			GitClient:          githubClient.Git,
 			PullRequestClient:  githubClient.PullRequests,
 			RepositoriesClient: githubClient.Repositories,
+			UsersClient:        githubClient.Users,
 		},
 		o.PublishedHelmChartGitHubOwner,
 		o.PublishedHelmChartGitHubRepo,
