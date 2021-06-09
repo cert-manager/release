@@ -145,3 +145,12 @@ to set the following flags when calling `cmrel publish`:
     --published-helm-chart-bucket='mycompany-helm-charts' # name of the GCS bucket where the built Helm chart should be stored
     --published-github-org='mycompany' # name of the GitHub org containing the repo that will be tagged at the end
 ```
+
+### Development
+
+#### Creating development builds
+
+By default the artifacts created during a release process are pushed to `cert-manager-release` bucket at `/stage/gcb/release` path.
+It is also possible to create a 'development' build by skipping the `--release-version` flag on `cmrel stage` command. This will result in the build artifacts being pushed to `cert-manager-release` bucket at `/stage/gcb/devel` path.
+
+If you have made some local changes to this tool and want to create a 'devel' build to test them, be mindful that the Google Cloud Build triggered by running `cmrel stage` clones this repository from GitHub and runs its own `cmrel` commands. You can modify the [Cloud Build config](https://github.com/cert-manager/release/blob/master/gcb/stage/cloudbuild.yaml) to configure a different GitHub repository/branch.

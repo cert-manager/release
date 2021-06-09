@@ -41,14 +41,14 @@ staging release bucket.
 
 var (
 	stageExample = fmt.Sprintf(`
-To stage a release of the 'master' branch to the default staging bucket, run: 
+To stage a release of the 'master' branch to the default staging bucket at 'devel' path, run:
 
-	%s %s --git-ref=master
+	%s %s --branch=master
 
-To stage a release of the 'release-0.14' branch to the default staging bucket,
+To stage a release of the 'release-0.14' branch to the default staging bucket at 'release' path,
 overriding the release version as 'v0.14.0', run:
 
-	%s %s --git-ref=release-0.14 --release-version=v0.14.0`, rootCommand, stageCommand, rootCommand, stageCommand)
+	%s %s --branch=release-0.14 --release-version=v0.14.0`, rootCommand, stageCommand, rootCommand, stageCommand)
 )
 
 type stageOptions struct {
@@ -61,7 +61,7 @@ type stageOptions struct {
 	// Name of the GitHub repo to fetch cert-manager sources from
 	Repo string
 
-	// Name of the GitHub repo to build cert-manager sources from
+	// Name of the branch in the GitHub repo to build cert-manager sources from
 	Branch string
 
 	// Optional commit ref of cert-manager that should be staged
@@ -70,7 +70,7 @@ type stageOptions struct {
 	// The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild
 	CloudBuildFile string
 
-	// Project to run the GCB job in
+	// Project is the name of the GCP project to run the GCB job in
 	Project string
 
 	// ReleaseVersion, if set, overrides the version git version tag used
@@ -95,7 +95,7 @@ func (o *stageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.CloudBuildFile, "cloudbuild", "./gcb/stage/cloudbuild.yaml", "The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild. "+
 		"The default value assumes that this tool is run from the root of the release repository.")
 	fs.StringVar(&o.Project, "project", release.DefaultReleaseProject, "The GCP project to run the GCB build jobs in.")
-	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Optional release version override used to force the version strings used during the release to a specific value.")
+	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Optional release version override used to force the version strings used during the release to a specific value. If not set, build is treated as development build and artifacts staged to 'devel' path.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository set when building the release.")
 	markRequired("branch")
 }
