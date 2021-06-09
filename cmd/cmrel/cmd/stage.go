@@ -70,7 +70,7 @@ type stageOptions struct {
 	// The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild
 	CloudBuildFile string
 
-	// GCP project to run the GCB job in
+	// Project is the name of the GCP project to run the GCB job in
 	Project string
 
 	// ReleaseVersion, if set, overrides the version git version tag used
