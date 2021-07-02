@@ -4,11 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cert-manager/release/pkg/release/images/fake"
-
-	"github.com/cert-manager/release/pkg/release/images"
-
 	"github.com/cert-manager/release/pkg/release"
+	"github.com/cert-manager/release/pkg/release/images"
+	"github.com/cert-manager/release/pkg/release/images/fake"
 )
 
 func TestValidate_Semver(t *testing.T) {
