@@ -21,12 +21,12 @@ import (
 	"fmt"
 	"log"
 	"sort"
-	"strings"
 	"text/tabwriter"
 
 	"cloud.google.com/go/storage"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
+	"golang.org/x/mod/semver"
 
 	"github.com/cert-manager/release/pkg/release"
 )
@@ -74,7 +74,7 @@ The output is sorted lexicographically using the version string:
 If you already know the release version (and since you have run 'cmrel stage',
 you probably do), you can select just these versions:
 
-	cmrel staged --release-version=v1.3.0
+	cmrel staged --release-version=v1.3.1
 
 which will only show the releases that you are interested in:
 
@@ -196,5 +196,5 @@ type ByVersion []release.Staged
 func (a ByVersion) Len() int      { return len(a) }
 func (a ByVersion) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a ByVersion) Less(i, j int) bool {
-	return strings.Compare(a[i].Metadata().ReleaseVersion, a[j].Metadata().ReleaseVersion) < 0
+	return semver.Compare(a[i].Metadata().ReleaseVersion, a[j].Metadata().ReleaseVersion) < 0
 }
