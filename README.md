@@ -1,6 +1,10 @@
-# cert-manager release tooling
+# cert-manager Release Tooling
 
 This repository contains release tooling for the cert-manager project.
+
+NB: The most up-to-date release process is documented on the [cert-manager website](https://cert-manager.io/docs/contributing/release-process/).
+If you're trying to do a cert-manager release, you should start on the website. The docs
+here are mostly intended for people developing cert-manager tooling.
 
 ## cmrel
 
@@ -13,7 +17,7 @@ It has 3 primary functions:
 * Listing staged releases
 * Publishing a staged release
 
-### Creating an official release
+### Creating an Official Release
 
 > *WARNING*: following these steps exactly will push out a *public facing release*!
 > Please use this as an example *only*.
@@ -37,7 +41,7 @@ For example purposes, we'll:
 The `cmrel` tool provides a subcommand to start this process, `cmrel stage`.
 Full usage information for `cmrel stage`:
 
-```
+```text
 Flags:
       --branch string                 The git branch to build the release from. If --git-ref is not specified, the HEAD of this branch will be looked up on GitHub. (default "master")
       --bucket string                 The name of the GCS bucket to stage the release to. (default "cert-manager-release")
@@ -61,7 +65,7 @@ to publish to.
 
 We'll run `cmrel stage` below to start a GCB job to stage the release:
 
-```
+```console
 $ cmrel stage \
     --branch release-0.14 \
     --release-version v0.14.0
@@ -75,7 +79,7 @@ follow along and view logs to track the build progress.
 
 Once complete, `cmrel stage` should exit successfully.
 
-#### Step 2 - listing staged builds
+#### Step 2 - Listing Staged Builds
 
 After a build has been staged, it's important that you verify the release has
 been published to the bucket as expected.
@@ -85,7 +89,7 @@ staged to the release bucket.
 
 Full usage information for `cmrel staged`:
 
-```
+```text
 Flags:
       --bucket string            The name of the GCS bucket containing the staged releases. (default "cert-manager-release")
       --git-ref string           Optional specific git reference to list staged releases for - if specified, --release-version must also be specified.
@@ -96,7 +100,7 @@ Flags:
 
 Running it will print a list of staged releases:
 
-```
+```console
 $ cmrel staged
 ...
 NAME                                             VERSION DATE
@@ -110,7 +114,7 @@ that the correct revision of cert-manager has in fact been built.
 Once you have found the release you wish to stage in this list, make a note of
 the release's `name` and proceed to step 3!
 
-#### Step 3 - publishing a staged release
+#### Step 3 - Publishing a Staged Release
 
 Once a release has been staged into the release bucket and we've verified it
 has been built from the correct revision of cert-manager, we are now ready to
@@ -119,8 +123,7 @@ trigger the publishing stage of the release.
 In this step, the staged release is fetched from Google Cloud Storage,
 validated, and then pushed out to public facing locations.
 
-```
-
+```console
 $ cmrel publish \
     --release-name v0.14.0-f6da9c76877551ef32503b17189bb178501f59a7 \
     --nomock
@@ -140,7 +143,7 @@ If you are intending to publish to your own, private release buckets (i.e. to
 test this whole workflow, or for creating internal releases) you should be sure
 to set the following flags when calling `cmrel publish`:
 
-```
+```text
     --published-image-repo='quay.io/mycompany' # prefix for images, e.g. 'quay.io/mycompany'
     --published-helm-chart-bucket='mycompany-helm-charts' # name of the GCS bucket where the built Helm chart should be stored
     --published-github-org='mycompany' # name of the GitHub org containing the repo that will be tagged at the end
@@ -148,7 +151,7 @@ to set the following flags when calling `cmrel publish`:
 
 ### Development
 
-#### Creating development builds
+#### Creating Development Builds
 
 By default the artifacts created during a release process are pushed to `cert-manager-release` bucket at `/stage/gcb/release` path.
 It is also possible to create a 'development' build by skipping the `--release-version` flag on `cmrel stage` command. This will result in the build artifacts being pushed to `cert-manager-release` bucket at `/stage/gcb/devel` path.
