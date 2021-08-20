@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -298,7 +297,7 @@ func readBazelVersion(wd string) (string, error) {
 		return "", err
 	}
 
-	vBytes, err := ioutil.ReadFile(buildArtifactPath(wd, "version"))
+	vBytes, err := os.ReadFile(buildArtifactPath(wd, "version"))
 	if err != nil {
 		return "", err
 	}

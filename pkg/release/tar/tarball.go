@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -118,7 +117,7 @@ func ReadSingleFile(filename string, r io.Reader) ([]byte, error) {
 		if header.Typeflag == tar.TypeDir {
 			return nil, fmt.Errorf("expected path %q to be a file, but it was a directory", filename)
 		}
-		return ioutil.ReadAll(tr)
+		return io.ReadAll(tr)
 	}
 	return nil, fmt.Errorf("could not find file %q in tar input", filename)
 }

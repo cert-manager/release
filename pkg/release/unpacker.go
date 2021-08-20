@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -212,7 +211,7 @@ func manifestArtifactForStaged(s *Staged) (*StagedArtifact, error) {
 }
 
 func extractStagedArtifactToTempDir(ctx context.Context, a *StagedArtifact) (string, error) {
-	dest, err := ioutil.TempDir("", "extracted-artifact-")
+	dest, err := os.MkdirTemp("", "extracted-artifact-")
 	if err != nil {
 		return "", err
 	}
@@ -222,7 +221,7 @@ func extractStagedArtifactToTempDir(ctx context.Context, a *StagedArtifact) (str
 
 func extractStagedArtifact(ctx context.Context, a *StagedArtifact, dest string) error {
 	// download the file to disk first
-	f, err := ioutil.TempFile("", "temp-artifact-")
+	f, err := os.CreateTemp("", "temp-artifact-")
 	if err != nil {
 		return err
 	}

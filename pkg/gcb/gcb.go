@@ -20,8 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"time"
 
 	"google.golang.org/api/cloudbuild/v1"
@@ -37,7 +37,7 @@ const (
 // LoadBuild will decode a cloudbuild.yaml file into a cloudbuild.Build
 // structure and return it.
 func LoadBuild(filename string) (*cloudbuild.Build, error) {
-	f, err := ioutil.ReadFile(filename)
+	f, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
