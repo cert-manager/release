@@ -3,9 +3,9 @@ package helm
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/google/go-github/v35/github"
@@ -182,7 +182,7 @@ func (o *gitHubRepositoryManager) createBranch(ctx context.Context, sourceName, 
 // commitChartToBranch uploads a single Helm chart to the target branch.
 func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, branch string, chart manifests.Chart) error {
 	chartFileName := chart.PackageFileName()
-	chartContent, err := ioutil.ReadFile(chart.Path())
+	chartContent, err := os.ReadFile(chart.Path())
 	if err != nil {
 		return errors.WithStack(err)
 	}

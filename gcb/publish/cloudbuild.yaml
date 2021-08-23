@@ -20,7 +20,7 @@ secrets:
 steps:
 
 ## Clone & checkout the cert-manager release repository
-- name: gcr.io/cloud-builders/go
+- name: gcr.io/cloud-builders/go:alpine-1.16
   dir: "go/src/github.com/cert-manager/release"
   entrypoint: sh
   args:

@@ -41,7 +41,7 @@ staging release bucket.
 
 var (
 	stagedExample = fmt.Sprintf(`
-To staged a release of the 'master' branch to the default staging bucket, run: 
+To staged a release of the 'master' branch to the default staging bucket, run:
 
 	%s %s --git-ref=master
 
