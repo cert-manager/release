@@ -18,8 +18,13 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-echo "+++ Building cmrel tool"
-go build -o cmrel ./cmd/cmrel
+if [ -z ${1+x} ]; then
+	echo "+++ Building cmrel tool"
+	go build -o ./cmrel ./cmd/cmrel
+	CMREL=./cmrel
+else
+	CMREL=$1
+fi
 
 # clone cert-manager @ master
 echo "+++ Cloning jetstack/cert-manager repository"
@@ -28,7 +33,7 @@ trap "rm -rf ${tmpdir}" EXIT
 git clone https://github.com/jetstack/cert-manager.git "${tmpdir}"
 
 echo "+++ Running 'gcb stage' command"
-./cmrel gcb stage \
+$CMREL gcb stage \
   --repo-path="${tmpdir}" \
   --skip-push=true \
   --debug

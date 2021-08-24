@@ -1,5 +1,6 @@
-# Built cmrel binary
+# Built binaries
 /cmrel
+bin/
 
 # Binaries for programs and plugins
 *.exe
