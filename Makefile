@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 # Copyright 2021 The cert-manager Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,21 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -o nounset
-set -o errexit
-set -o pipefail
-
-echo "+++ Building cmrel tool"
-go build -o cmrel ./cmd/cmrel
-
-# clone cert-manager @ master
-echo "+++ Cloning jetstack/cert-manager repository"
-tmpdir="$(mktemp -d)"
-trap "rm -rf ${tmpdir}" EXIT
-git clone https://github.com/jetstack/cert-manager.git "${tmpdir}"
-
-echo "+++ Running 'gcb stage' command"
-./cmrel gcb stage \
-  --repo-path="${tmpdir}" \
-  --skip-push=true \
-  --debug
+.PHONY: verify-boilerplate
+verify-boilerplate:
+	@./hack/verify_boilerplate.py
