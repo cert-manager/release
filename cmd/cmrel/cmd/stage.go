@@ -27,6 +27,8 @@ import (
 
 	"github.com/cert-manager/release/pkg/gcb"
 	"github.com/cert-manager/release/pkg/release"
+
+	_ "embed"
 )
 
 const (
@@ -67,9 +69,6 @@ type stageOptions struct {
 	// Optional commit ref of cert-manager that should be staged
 	GitRef string
 
-	// The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild
-	CloudBuildFile string
-
 	// Project is the name of the GCP project to run the GCB job in
 	Project string
 
@@ -92,8 +91,6 @@ func (o *stageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Repo, "repo", "cert-manager", "Name of the GitHub repo to fetch cert-manager sources from.")
 	fs.StringVar(&o.Branch, "branch", "master", "The git branch to build the release from. If --git-ref is not specified, the HEAD of this branch will be looked up on GitHub.")
 	fs.StringVar(&o.GitRef, "git-ref", "", "The git commit ref of cert-manager that should be staged.")
-	fs.StringVar(&o.CloudBuildFile, "cloudbuild", "./gcb/stage/cloudbuild.yaml", "The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild. "+
-		"The default value assumes that this tool is run from the root of the release repository.")
 	fs.StringVar(&o.Project, "project", release.DefaultReleaseProject, "The GCP project to run the GCB build jobs in.")
 	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Optional release version override used to force the version strings used during the release to a specific value. If not set, build is treated as development build and artifacts staged to 'devel' path.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository set when building the release.")
@@ -107,7 +104,6 @@ func (o *stageOptions) print() {
 	log.Printf("  Repo: %q", o.Repo)
 	log.Printf("  Branch: %q", o.Branch)
 	log.Printf("  GitRef: %q", o.GitRef)
-	log.Printf("  CloudBuildFile: %q", o.CloudBuildFile)
 	log.Printf("  Project: %q", o.Project)
 	log.Printf("  ReleaseVersion: %q", o.ReleaseVersion)
 	log.Printf("  PublishedImageRepo: %q", o.PublishedImageRepository)
@@ -133,7 +129,10 @@ func stageCmd(rootOpts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-func runStage(rootOpts *rootOptions, o *stageOptions) error {
+//go:embed stage_cloudbuild.yaml
+var cloudbuildStage []byte
+
+func runStage(_ *rootOptions, o *stageOptions) error {
 	if o.GitRef == "" {
 		log.Printf("git-ref flag not specified, looking up git commit ref for %s/%s@%s", o.Org, o.Repo, o.Branch)
 		ref, err := release.LookupBranchRef(o.Org, o.Repo, o.Branch)
@@ -144,8 +143,7 @@ func runStage(rootOpts *rootOptions, o *stageOptions) error {
 	}
 	log.Printf("Staging build for %s/%s@%s", o.Org, o.Repo, o.GitRef)
 
-	log.Printf("DEBUG: Loading cloudbuild.yaml file from %q", o.CloudBuildFile)
-	build, err := gcb.LoadBuild(o.CloudBuildFile)
+	build, err := gcb.LoadCloudBuild(cloudbuildStage)
 	if err != nil {
 		return fmt.Errorf("error loading cloudbuild.yaml file: %w", err)
 	}

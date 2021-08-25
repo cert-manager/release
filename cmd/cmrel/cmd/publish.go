@@ -28,6 +28,8 @@ import (
 
 	"github.com/cert-manager/release/pkg/gcb"
 	"github.com/cert-manager/release/pkg/release"
+
+	_ "embed"
 )
 
 const (
@@ -52,9 +54,6 @@ type publishOptions struct {
 
 	// Name of the staged release to publish
 	ReleaseName string
-
-	// The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild
-	CloudBuildFile string
 
 	// Project to run the GCB job in
 	Project string
@@ -98,8 +97,6 @@ type publishOptions struct {
 func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Bucket, "bucket", release.DefaultBucketName, "The name of the GCS bucket to publish the release to.")
 	fs.StringVar(&o.ReleaseName, "release-name", "", "Name of the staged release to publish.")
-	fs.StringVar(&o.CloudBuildFile, "cloudbuild", "./gcb/publish/cloudbuild.yaml", "The path to the cloudbuild.yaml file used to publish the release. "+
-		"The default value assumes that this tool is run from the root of the release repository.")
 	fs.StringVar(&o.Project, "project", release.DefaultReleaseProject, "The GCP project to run the GCB build jobs in.")
 	fs.BoolVar(&o.NoMock, "nomock", false, "Whether to actually publish the release. If false, the command will exit after preparing the release for pushing.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository to push the release images & manifest lists to.")
@@ -114,7 +111,6 @@ func (o *publishOptions) print() {
 	log.Printf("Publish options:")
 	log.Printf("  Bucket: %q", o.Bucket)
 	log.Printf("  ReleaseName: %q", o.ReleaseName)
-	log.Printf("  CloudBuildFile: %q", o.CloudBuildFile)
 	log.Printf("  Project: %q", o.Project)
 	log.Printf("  NoMock: %t", o.NoMock)
 	log.Printf("  PublishedImageRepo: %q", o.PublishedImageRepository)
@@ -145,7 +141,10 @@ func publishCmd(rootOpts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-func runPublish(rootOpts *rootOptions, o *publishOptions) error {
+//go:embed publish_cloudbuild.yaml
+var cloudbuildPublish []byte
+
+func runPublish(_ *rootOptions, o *publishOptions) error {
 	ctx := context.Background()
 	gcs, err := storage.NewClient(ctx)
 	if err != nil {
@@ -159,8 +158,7 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	}
 	log.Printf("Release with version %q (%s) will be published", rel.Metadata().ReleaseVersion, rel.Metadata().GitCommitRef)
 
-	log.Printf("DEBUG: Loading cloudbuild.yaml file from %q", o.CloudBuildFile)
-	build, err := gcb.LoadBuild(o.CloudBuildFile)
+	build, err := gcb.LoadCloudBuild(cloudbuildPublish)
 	if err != nil {
 		return fmt.Errorf("error loading cloudbuild.yaml file: %w", err)
 	}

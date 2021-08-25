@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"google.golang.org/api/cloudbuild/v1"
@@ -34,16 +33,11 @@ const (
 	Failure = "FAILURE"
 )
 
-// LoadBuild will decode a cloudbuild.yaml file into a cloudbuild.Build
-// structure and return it.
-func LoadBuild(filename string) (*cloudbuild.Build, error) {
-	f, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-
+// LoadCloudBuild will decode the content of a cloudbuild.yaml file into a
+// cloudbuild.Build structure and return it.
+func LoadCloudBuild(cloudbuildRaw []byte) (*cloudbuild.Build, error) {
 	cb := cloudbuild.Build{}
-	if err := yaml.UnmarshalStrict(f, &cb); err != nil {
+	if err := yaml.UnmarshalStrict(cloudbuildRaw, &cb); err != nil {
 		return nil, err
 	}
 
@@ -59,10 +53,9 @@ func SubmitBuild(svc *cloudbuild.Service, projectID string, build *cloudbuild.Bu
 		return nil, err
 	}
 
-	log.Printf("DEBUG: decoding build operation metadata")
 	metadata := &cloudbuild.BuildOperationMetadata{}
 	if err := json.Unmarshal(op.Metadata, metadata); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("while decoding build operation metadata: %v", err)
 	}
 
 	return metadata.Build, nil
