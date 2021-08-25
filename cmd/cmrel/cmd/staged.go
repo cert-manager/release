@@ -169,11 +169,11 @@ func runStaged(_ *rootOptions, o *stagedOptions) error {
 		return fmt.Errorf("failed listing staged releases: %w", err)
 	}
 
-	lines := []string{"NAME\tVERSION\tDATE"}
+	lines := []string{"NAME\tVERSION"}
 	sort.Sort(ByVersion(stagedReleases))
 	for _, rel := range stagedReleases {
 		vers := rel.Metadata().ReleaseVersion
-		lines = append(lines, fmt.Sprintf("%s\t%s\tUNKNOWN", rel.Name(), vers))
+		lines = append(lines, fmt.Sprintf("%s\t%s", rel.Name(), vers))
 	}
 
 	logTable(lines...)
