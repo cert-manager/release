@@ -12,6 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+.PHONY: build
+build: bin/cmrel
+
+.PHONY: bin/cmrel
+bin/cmrel:
+	go build -o $@ ./cmd/cmrel
+
+.PHONY: presubmit
+presubmit: bin/cmrel verify-boilerplate
+	./test/presubmit.sh $<
+
 .PHONY: verify-boilerplate
 verify-boilerplate:
 	@./hack/verify_boilerplate.py
+
+.PHONY: clean
+clean:
+	rm -rf ./bin ./cmrel
