@@ -40,10 +40,7 @@ Helm charts, generated static manifests and create a release tag on GitHub.
 
 It can only be run by specifying a previously staged build.
 `
-)
-
-var (
-	publishExample = fmt.Sprintf(``)
+	publishExample = ""
 )
 
 type publishOptions struct {

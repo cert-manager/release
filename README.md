@@ -6,6 +6,17 @@ NB: The most up-to-date release process is documented on the [cert-manager websi
 If you're trying to do a cert-manager release, you should start on the website. The docs
 here are mostly intended for people developing cert-manager tooling.
 
+## Control Flow During a Release
+
+`cmrel` is used in various places - including by itself - to carry out a release.
+
+The process can be summarised roughly as follows:
+
+- A developer calls `cmrel stage` on their machine which triggers the "stage" [GCB job](./gcb/stage/cloudbuild.yaml)
+- The "stage" GCB job calls `cmrel gcb stage` which creates cert-manager artifacts
+- A developer calls `cmrel publish` on their machine, which triggers the "publish" [GCB job](./gcb/publish/cloudbuild.yaml)
+- The "publish" GCB job calls `cmrel gcb publish` which uploads the artifacts wherever they need to be published
+
 ## cmrel
 
 cmrel is the central hub for release managers interacting with the release
