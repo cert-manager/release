@@ -24,7 +24,7 @@ steps:
     CGO_ENABLED=0 go build -o /workspace/go/bin/cmrel ./cmd/cmrel
 
 ## Build and push the release artifacts
-- name: 'l.gcr.io/google/bazel:${_BAZEL_VERSION}'
+- name: 'gcr.io/cloud-builders/bazel@${_BAZEL_IMAGE_SHA}'
   dir: "go/src/github.com/jetstack/cert-manager"
   entrypoint: /workspace/go/bin/cmrel
   args:
@@ -51,7 +51,10 @@ substitutions:
   _RELEASE_VERSION: ""
   _RELEASE_BUCKET: ""
   _PUBLISHED_IMAGE_REPO: quay.io/jetstack
-  _BAZEL_VERSION: "4.2.1"
+  # gcr.io/cloud-builders/bazel does not have tagged images only image digests,
+  # so we have to manually find an image with the desired version.
+  _BAZEL_VERSION: 4.2.1
+  _BAZEL_IMAGE_SHA: "sha256:9950b67658ab659f6efbe39f64e202f6f5bb15f7934b203f6132018410758d0c"
   ## Options controlling the version of the release tooling used in the build.
   _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
   _RELEASE_REPO_REF: "master"
