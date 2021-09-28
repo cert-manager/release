@@ -45,8 +45,12 @@ func gcbCmd(o *rootOptions) *cobra.Command {
 		},
 		Long: gcbDescriptionLong,
 	}
+
 	o.AddFlags(cmd.PersistentFlags(), mustMarkRequired(cmd.MarkPersistentFlagRequired))
+
 	cmd.AddCommand(gcbStageCmd(o))
 	cmd.AddCommand(gcbPublishCmd(o))
+	cmd.AddCommand(gcbBootstrapPGPCmd(o))
+
 	return cmd
 }
