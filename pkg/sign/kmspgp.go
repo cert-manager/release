@@ -36,7 +36,19 @@ import (
 const (
 	pgpName  = "cert-manager Maintainers"
 	pgpEmail = "cert-manager-maintainers@googlegroups.com"
+
+	// PGP key ids are complicated, see https://datatracker.ietf.org/doc/html/rfc4880#section-12
+	// Key IDs include hashed data taken from the "public key packet" (go doc "golang.org/x/crypto/openpgp/packet" PublicKey)
+	// The public key packet, crucially, includes its CreationTime. That means that for a key with a stable
+	// static ID to be created, the creation time must be static.
+	// We could use the time that the KMS key was created, but that requires addtional permissions (i.e., the permission to "get"
+	// the key using the GCP API), so instead we hardcode the creation time for all keys.
+	// The time below is "2021-09-29T14:09:53Z", which just happens to be the time this change was started.
+	keyCreationTimeUnix = 1632924593
 )
+
+// see comment for keyCreationTimeUnix
+var staticKeyCreationTime = time.Unix(keyCreationTimeUnix, 0)
 
 // PGPArmoredBlock is an ASCII-armored PGP key block
 type PGPArmoredBlock string
@@ -47,13 +59,7 @@ type PGPArmoredBlock string
 func BootstrapPGPFromGCP(ctx context.Context, key string) (PGPArmoredBlock, error) {
 	// Largely taken from:
 	// https://github.com/heptiolabs/google-kms-pgp/blob/89c17dd5877a5c0f98f1906444b831dd2352b365/main.go#L131-L209
-
-	// The DefaultHash needs to be SHA512 for helm
-	packetCfg := &packet.Config{
-		DefaultHash: crypto.SHA512,
-	}
-
-	entity, err := deriveEntity(ctx, key, packetCfg)
+	entity, packetCfg, err := deriveEntity(ctx, key)
 	if err != nil {
 		return "", fmt.Errorf("failed to get an entity from key %q: %w", key, err)
 	}
@@ -113,32 +119,39 @@ func BootstrapPGPFromGCP(ctx context.Context, key string) (PGPArmoredBlock, erro
 }
 
 // deriveEntity creates a PGP entity from the given key; the entity wraps a private key and an
-// identity and can be used for signing either the key itself or other charts.
-func deriveEntity(ctx context.Context, key string, cfg *packet.Config) (*openpgp.Entity, error) {
+// identity and can be used for signing either the key itself or other charts. The openpgp packet
+// config is also returned.
+func deriveEntity(ctx context.Context, key string) (*openpgp.Entity, *packet.Config, error) {
 	// Largely taken from:
 	// https://github.com/heptiolabs/google-kms-pgp/blob/89c17dd5877a5c0f98f1906444b831dd2352b365/main.go#L320-L356
+
+	// The DefaultHash needs to be SHA512 for helm
+	cfg := &packet.Config{
+		DefaultHash: crypto.SHA512,
+	}
+
 	if key == "" {
-		return nil, fmt.Errorf("missing required KMS key for deriving a PGP identity")
+		return nil, nil, fmt.Errorf("missing required KMS key for deriving a PGP identity")
 	}
 
 	oauthClient, err := google.DefaultClient(ctx, cloudkms.CloudPlatformScope)
 	if err != nil {
-		return nil, fmt.Errorf("could not create GCP OAuth2 client: %w", err)
+		return nil, nil, fmt.Errorf("could not create GCP OAuth2 client: %w", err)
 	}
 
 	svc, err := cloudkms.NewService(ctx, option.WithHTTPClient(oauthClient))
 	if err != nil {
-		return nil, fmt.Errorf("could not create GCP KMS client: %w", err)
+		return nil, nil, fmt.Errorf("could not create GCP KMS client: %w", err)
 	}
 
-	signer, err := kmssigner.NewWithExplicitMetadata(svc, key, cfg.DefaultHash, time.Now())
+	signer, err := kmssigner.NewWithExplicitMetadata(svc, key, cfg.DefaultHash, staticKeyCreationTime)
 	if err != nil {
-		return nil, fmt.Errorf("could not create KMS signer: %w", err)
+		return nil, nil, fmt.Errorf("could not create KMS signer: %w", err)
 	}
 
 	entity := &openpgp.Entity{
 		PrimaryKey: packet.NewRSAPublicKey(signer.CreationTime(), signer.RSAPublicKey()),
-		PrivateKey: packet.NewSignerPrivateKey(cfg.Now(), signer),
+		PrivateKey: packet.NewSignerPrivateKey(signer.CreationTime(), signer),
 		Identities: make(map[string]*openpgp.Identity),
 	}
 
@@ -148,5 +161,5 @@ func deriveEntity(ctx context.Context, key string, cfg *packet.Config) (*openpgp
 	// "Without this, signatures end up with a key ID that doesn't match the primary key"
 	entity.PrivateKey.KeyId = entity.PrimaryKey.KeyId
 
-	return entity, nil
+	return entity, cfg, nil
 }
