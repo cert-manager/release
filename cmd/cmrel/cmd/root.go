@@ -80,6 +80,7 @@ func Execute() {
 	cmd.AddCommand(gcbCmd(o))
 	cmd.AddCommand(publishCmd(o))
 	cmd.AddCommand(bootstrapPGPCmd(o))
+	cmd.AddCommand(signCmd(o))
 	if err := cmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
