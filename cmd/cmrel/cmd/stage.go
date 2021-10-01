@@ -84,6 +84,13 @@ type stageOptions struct {
 	// This must be set at the time a build is staged as parts of the release
 	// incorporate this docker repository name.
 	PublishedImageRepository string
+
+	// SigningKMSKey is the full name of the GCP KMS key to be used for signing, e.g.
+	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/cryptoKeyVersions/<KEY_VERSION>
+	SigningKMSKey string
+
+	// SkipSigning, if true, will skip trying to sign artifacts using KMS
+	SkipSigning bool
 }
 
 func (o *stageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
@@ -97,6 +104,8 @@ func (o *stageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Project, "project", release.DefaultReleaseProject, "The GCP project to run the GCB build jobs in.")
 	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Optional release version override used to force the version strings used during the release to a specific value. If not set, build is treated as development build and artifacts staged to 'devel' path.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository set when building the release.")
+	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", "", "Full name of the GCP KMS key to use for signing")
+	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing release artifacts.")
 	markRequired("branch")
 }
 
@@ -108,7 +117,9 @@ func (o *stageOptions) print() {
 	log.Printf("  Branch: %q", o.Branch)
 	log.Printf("  GitRef: %q", o.GitRef)
 	log.Printf("  CloudBuildFile: %q", o.CloudBuildFile)
+	log.Printf("  SkipSigning: %v", o.SkipSigning)
 	log.Printf("  Project: %q", o.Project)
+	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
 	log.Printf("  ReleaseVersion: %q", o.ReleaseVersion)
 	log.Printf("  PublishedImageRepo: %q", o.PublishedImageRepository)
 }
@@ -160,6 +171,8 @@ func runStage(rootOpts *rootOptions, o *stageOptions) error {
 	build.Substitutions["_RELEASE_BUCKET"] = o.Bucket
 	build.Substitutions["_TAG_RELEASE_BRANCH"] = o.Branch
 	build.Substitutions["_PUBLISHED_IMAGE_REPO"] = o.PublishedImageRepository
+	build.Substitutions["_KMS_KEY"] = o.SigningKMSKey
+	build.Substitutions["_SKIP_SIGNING"] = fmt.Sprintf("%v", o.SkipSigning)
 
 	outputDir := ""
 	// If --release-version is not explicitly set, we treat this build as a

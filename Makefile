@@ -20,7 +20,7 @@ bin/cmrel:
 	go build -o $@ ./cmd/cmrel
 
 .PHONY: presubmit
-presubmit: bin/cmrel verify-boilerplate
+presubmit: bin/cmrel test verify-boilerplate
 	./test/presubmit.sh $<
 
 .PHONY: verify-boilerplate
@@ -30,3 +30,11 @@ verify-boilerplate:
 .PHONY: clean
 clean:
 	rm -rf ./bin ./cmrel
+
+.PHONY: test
+test:
+	@# TODO: this should be go test ./... but one of the tests was broken a while back and needs fixing first
+	go test ./pkg/release/helm
+	go test ./pkg/release/manifests
+	@# go test ./pkg/release/validation  # this one is broken
+	go test ./pkg/sign
