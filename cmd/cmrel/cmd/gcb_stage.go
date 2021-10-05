@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/cert-manager/release/pkg/release"
+	"github.com/cert-manager/release/pkg/sign"
 )
 
 const (
@@ -48,6 +49,8 @@ This is the internal version of the 'stage' target. It is intended to be run by
 a Google Cloud Build started via the 'stage' sub-command.
 `
 )
+
+type postprocessFunc func(string) error
 
 type gcbStageOptions struct {
 	// The name of the GCS bucket to stage the release to.
@@ -71,6 +74,14 @@ type gcbStageOptions struct {
 
 	// SkipPush, if true, will skip pushing the staged release to a GCS bucket.
 	SkipPush bool
+
+	// SkipSigning, if true, will skip trying to sign artifacts using KMS
+	SkipSigning bool
+
+	// SigningKMSKey is the full name of the GCP KMS key to be used for signing, e.g.
+	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/cryptoKeyVersions/<KEY_VERSION>
+	// This must be set if SkipSigning is not set to true
+	SigningKMSKey string
 }
 
 func (o *gcbStageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
@@ -78,13 +89,18 @@ func (o *gcbStageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) 
 	fs.StringVar(&o.RepoPath, "repo-path", "", "Path to the cert-manager repository stored in disk to be built and published. This must already be checked out at the appropriate revision.")
 	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Optional release version override used to force the version strings used during the release to a specific value.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository set when building the release.")
+	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", "", "Full name of the GCP KMS key to use for signing")
 	fs.BoolVar(&o.SkipPush, "skip-push", false, "Skip pushing the staged release to a GCS bucket.")
+	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing release artifacts.")
 }
 
 func (o *gcbStageOptions) print() {
 	log.Printf("GCB Stage options:")
 	log.Printf("  Bucket: %q", o.Bucket)
 	log.Printf("  RepoPath: %q", o.RepoPath)
+	log.Printf("  SkipPush: %v", o.SkipPush)
+	log.Printf("  SkipSigning: %v", o.SkipSigning)
+	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
 	log.Printf("  ReleaseVersion: %q", o.ReleaseVersion)
 }
 
@@ -108,6 +124,8 @@ func gcbStageCmd(rootOpts *rootOptions) *cobra.Command {
 }
 
 func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
+	ctx := context.Background()
+
 	gitRef, err := readGitRef(o.RepoPath)
 	if err != nil {
 		return fmt.Errorf("failed to read git ref from repository: %v", err)
@@ -155,6 +173,8 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 	}
 
 	var artifacts []release.ArtifactMetadata
+
+	// build cert-manager container images
 	for osVariant, archs := range release.ServerPlatforms {
 		for _, arch := range archs {
 			// create an artifact for the arch specific 'server' release tarball
@@ -165,6 +185,8 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 			}
 		}
 	}
+
+	// build cert-manager kubectl plugin binaries
 	for osVariant, archs := range release.ClientPlatforms {
 		for _, arch := range archs {
 			// create an artifact for the os and arch specific 'ctl' release tarball
@@ -175,8 +197,18 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 			}
 		}
 	}
-	// Add the 'manifests' file to the release output
-	if err := appendArtifact(&artifacts, o.RepoPath, "cert-manager-manifests.tar.gz", "", ""); err != nil {
+
+	manifestPostProcessor := func(path string) error {
+		if o.SkipSigning {
+			log.Println("skipping signing cert-manager-manifests.tar.gz because skip-signing is true")
+			return nil
+		}
+
+		return sign.CertManagerManifests(ctx, o.SigningKMSKey, path)
+	}
+
+	// build 'manifests' (helm chart, k8s YAML manifests)
+	if err := appendArtifactWithPostprocess(&artifacts, o.RepoPath, "cert-manager-manifests.tar.gz", "", "", manifestPostProcessor); err != nil {
 		return err
 	}
 
@@ -197,7 +229,6 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 	}
 
 	// Build Google Cloud Storage API client for uploading artifacts
-	ctx := context.Background()
 	gcs, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create GCS client: %w", err)
@@ -248,19 +279,36 @@ func bazelBuildEnv(opts *gcbStageOptions) []string {
 	return append(os.Environ(), "DOCKER_REGISTRY="+opts.PublishedImageRepository)
 }
 
-func appendArtifact(artifacts *[]release.ArtifactMetadata, repoPath, name, os, arch string) error {
+// build an artifact using the given name, and append it to the given list after running
+// postprocess to modify it in-place; postprocessing requires the path to the artifact
+func appendArtifactWithPostprocess(artifacts *[]release.ArtifactMetadata, repoPath, name, os, arch string, postprocess postprocessFunc) error {
 	artifactPath := buildArtifactPath(repoPath, "build", "release-tars", name)
+
+	if postprocess != nil {
+		err := postprocess(artifactPath)
+		if err != nil {
+			return fmt.Errorf("failed to postprocess %q: %w", artifactPath, err)
+		}
+	}
+
 	artifactHash, err := sha256SumFile(artifactPath)
 	if err != nil {
 		return fmt.Errorf("failed to compute sha256sum of release artifact %q: %w", artifactPath, err)
 	}
+
 	*artifacts = append(*artifacts, release.ArtifactMetadata{
 		Name:         name,
 		SHA256:       artifactHash,
 		OS:           os,
 		Architecture: arch,
 	})
+
 	return nil
+}
+
+// build an artifact using the given name, and append it to the given list
+func appendArtifact(artifacts *[]release.ArtifactMetadata, repoPath, name, os, arch string) error {
+	return appendArtifactWithPostprocess(artifacts, repoPath, name, os, arch, nil)
 }
 
 func platformFlagForOSArch(os, arch string) string {

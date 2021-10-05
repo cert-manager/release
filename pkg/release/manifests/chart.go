@@ -22,12 +22,15 @@ import (
 	"os"
 
 	"github.com/ghodss/yaml"
+	"k8s.io/utils/pointer"
 
 	"github.com/cert-manager/release/pkg/release/tar"
 )
 
 type Chart struct {
-	path string
+	path     string
+	provPath *string
+
 	meta chartMeta
 }
 
@@ -37,17 +40,23 @@ type chartMeta struct {
 	AppVersion string `yaml:"appVersion"`
 }
 
+// NewChart tries to read and extract metadata from a chart at `path`. It also searches
+// `path`+".prov" to check for a signature, and stores the path to a signature if found.
 func NewChart(path string) (*Chart, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
+
 	defer f.Close()
+
 	gzr, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, err
 	}
+
 	defer gzr.Close()
+
 	chartMetaBytes, err := tar.ReadSingleFile("cert-manager/Chart.yaml", gzr)
 	if err != nil {
 		return nil, err
@@ -58,9 +67,22 @@ func NewChart(path string) (*Chart, error) {
 		return nil, fmt.Errorf("failed to decode chart metadata: %w", err)
 	}
 
+	provPath := pointer.String(path + ".prov")
+
+	_, err = os.Stat(*provPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to check for %q: %w", *provPath, err)
+		}
+
+		provPath = nil
+	}
+
 	return &Chart{
 		path: path,
 		meta: meta,
+
+		provPath: provPath,
 	}, nil
 }
 
@@ -70,6 +92,10 @@ func (c *Chart) PackageFileName() string {
 
 func (c *Chart) Path() string {
 	return c.path
+}
+
+func (c *Chart) ProvPath() *string {
+	return c.provPath
 }
 
 func (c *Chart) Version() string {

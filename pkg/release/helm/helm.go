@@ -22,6 +22,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/go-github/v35/github"
@@ -195,13 +196,15 @@ func (o *gitHubRepositoryManager) createBranch(ctx context.Context, sourceName, 
 	return errors.WithStack(err)
 }
 
-// commitChartToBranch uploads a single Helm chart to the target branch.
+// commitChartToBranch uploads a single Helm chart to the target branch, along with its signature if such a signature exists
 func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, branch string, chart manifests.Chart) error {
 	chartFileName := chart.PackageFileName()
+
 	chartContent, err := os.ReadFile(chart.Path())
 	if err != nil {
 		return errors.WithStack(err)
 	}
+
 	_, _, err = o.RepositoriesClient.CreateFile(
 		ctx,
 		o.owner,
@@ -213,7 +216,38 @@ func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, branc
 			Branch:  pointer.StringPtr(branch),
 		},
 	)
-	return errors.WithStack(err)
+
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	provPath := chart.ProvPath()
+
+	if provPath != nil {
+		provFileName := filepath.Base(*provPath)
+		provContent, err := os.ReadFile(*provPath)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+
+		_, _, err = o.RepositoriesClient.CreateFile(
+			ctx,
+			o.owner,
+			o.repo,
+			"charts/"+provFileName,
+			&github.RepositoryContentFileOptions{
+				Content: provContent,
+				Message: pointer.StringPtr(fmt.Sprintf(tplCommitMessage, provFileName)),
+				Branch:  pointer.StringPtr(branch),
+			},
+		)
+
+		if err != nil {
+			return errors.WithStack(err)
+		}
+	}
+
+	return nil
 }
 
 func (o *gitHubRepositoryManager) destination() string {

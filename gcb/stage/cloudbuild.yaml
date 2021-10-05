@@ -34,6 +34,8 @@ steps:
   - --release-version=${_RELEASE_VERSION}
   - --published-image-repo=${_PUBLISHED_IMAGE_REPO}
   - --bucket=${_RELEASE_BUCKET}
+  - --signing-kms-key=${_KMS_KEY}
+  - --skip-signing=${_SKIP_SIGNING}
 
 tags:
 - "cert-manager-release-stage"
@@ -46,11 +48,13 @@ tags:
 substitutions:
   ## Required parameters
   _CM_REF: ""
+  _KMS_KEY: ""
   ## Optional/defaulted parameters
   _CM_REPO: https://github.com/jetstack/cert-manager.git
   _RELEASE_VERSION: ""
   _RELEASE_BUCKET: ""
   _PUBLISHED_IMAGE_REPO: quay.io/jetstack
+  _SKIP_SIGNING: "false"
   # gcr.io/cloud-builders/bazel does not have tagged images only image digests,
   # so we have to manually find an image with the desired version.
   _BAZEL_VERSION: 4.2.1

@@ -18,12 +18,18 @@ set -o nounset
 set -o errexit
 set -o pipefail
 
-if [ -z ${1+x} ]; then
-	echo "+++ Building cmrel tool"
-	go build -o ./cmrel ./cmd/cmrel
-	CMREL=./cmrel
-else
-	CMREL=$1
+CMREL=${1:-}
+
+SIGNING_KEY=${2:-}
+SKIP_SIGNING="true"
+
+if [ -z $CMREL ]; then
+	echo "usage: $0 <path-to-cmrel>"
+	exit 1
+fi
+
+if [ ! -z $SIGNING_KEY ]; then
+	SKIP_SIGNING="false"
 fi
 
 # clone cert-manager @ master
@@ -36,4 +42,6 @@ echo "+++ Running 'gcb stage' command"
 $CMREL gcb stage \
   --repo-path="${tmpdir}" \
   --skip-push=true \
+  --signing-kms-key="${SIGNING_KEY}" \
+  --skip-signing="${SKIP_SIGNING}" \
   --debug
