@@ -77,33 +77,6 @@ const (
 	BuildTypeDevel = "devel"
 )
 
-var (
-	// ServerPlatforms is the list of OSes and architectures to build docker images
-	// for during the release.
-	// This is used to drive the `--platforms` flag passed to 'bazel build' as
-	// well as to determine which image artifacts should be uploaded.
-	ServerPlatforms = map[string][]string{
-		"linux": []string{"amd64", "arm", "arm64", "ppc64le", "s390x"},
-	}
-
-	// ClientPlatforms is the list of OSes and architectures to build client CLI tools
-	// for during the release.
-	// This is used to determine which artifacts should be uploaded.
-	ClientPlatforms = map[string][]string{
-		"linux":   []string{"amd64", "arm", "arm64", "ppc64le", "s390x"},
-		"darwin":  []string{"amd64", "arm64"},
-		"windows": []string{"amd64"},
-	}
-
-	// ArchitecturesPerOS is the list of OSes and architectures that we can build
-	// This is used to drive the `--platforms` flag passed to 'bazel build'
-	ArchitecturesPerOS = map[string][]string{
-		"linux":   []string{"amd64", "arm", "arm64", "ppc64le", "s390x"},
-		"darwin":  []string{"amd64", "arm64"},
-		"windows": []string{"amd64"},
-	}
-)
-
 // BucketPathForRelease will assemble an output directory path for the given
 // release parameters.
 func BucketPathForRelease(bucketPrefix, buildType, releaseVersion, gitRef string) string {

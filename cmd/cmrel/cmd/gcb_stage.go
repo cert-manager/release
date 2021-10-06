@@ -32,7 +32,6 @@ import (
 	"cloud.google.com/go/storage"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"github.com/cert-manager/release/pkg/release"
 	"github.com/cert-manager/release/pkg/sign"
@@ -161,9 +160,9 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 	// of all the artifacts that were built during a `bazel run` invocation.
 	// This will mean we don't have to update this release tool whenever we add an additional
 	// release artifact.
+	osTargets := release.AllOSes()
 
-	allOSes := sets.NewString(append(append(platformMapKeys(release.ClientPlatforms), platformMapKeys(release.ServerPlatforms)...))...)
-	for _, osVariant := range allOSes.List() {
+	for _, osVariant := range osTargets {
 		for _, arch := range release.ArchitecturesPerOS[osVariant] {
 			log.Printf("Building %q target for %q OS for %q architecture", release.TarsBazelTarget, osVariant, arch)
 			if err := runBazel(o.RepoPath, bazelBuildEnv(o), "build", "--stamp", platformFlagForOSArch(osVariant, arch), release.TarsBazelTarget); err != nil {
@@ -384,13 +383,4 @@ func sha256SumFile(filename string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
-func platformMapKeys(in map[string][]string) []string {
-	keys := make([]string, 0, len(in))
-	for k := range in {
-		keys = append(keys, k)
-	}
-
-	return keys
 }
