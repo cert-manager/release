@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -85,12 +86,18 @@ type stageOptions struct {
 	// incorporate this docker repository name.
 	PublishedImageRepository string
 
+	// SkipSigning, if true, will skip trying to sign artifacts using KMS
+	SkipSigning bool
+
 	// SigningKMSKey is the full name of the GCP KMS key to be used for signing, e.g.
 	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/cryptoKeyVersions/<KEY_VERSION>
 	SigningKMSKey string
 
-	// SkipSigning, if true, will skip trying to sign artifacts using KMS
-	SkipSigning bool
+	// TargetOSes is a comma-separated list of OSes which should be built for in this invocation
+	TargetOSes string
+
+	// TargetArches is a comma-separated list of architectures which should be built for in this invocation
+	TargetArches string
 }
 
 func (o *stageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
@@ -106,6 +113,15 @@ func (o *stageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository set when building the release.")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", "", "Full name of the GCP KMS key to use for signing")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing release artifacts.")
+
+	allOSList := release.AllOSes()
+
+	allOSes := strings.Join(allOSList.List(), ", ")
+	allArches := strings.Join(release.AllArchesForOSes(allOSList).List(), ", ")
+
+	fs.StringVar(&o.TargetOSes, "target-os", "*", fmt.Sprintf("Comma-separated list of OSes to target, or '*' for all. Options: %s", allOSes))
+	fs.StringVar(&o.TargetArches, "target-arch", "*", fmt.Sprintf("Comma-separated list of arches to target, or '*' for all. Options: %s", allArches))
+
 	markRequired("branch")
 }
 
@@ -122,6 +138,8 @@ func (o *stageOptions) print() {
 	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
 	log.Printf("  ReleaseVersion: %q", o.ReleaseVersion)
 	log.Printf("  PublishedImageRepo: %q", o.PublishedImageRepository)
+	log.Printf("  TargetOSes: %q", o.TargetOSes)
+	log.Printf("  TargetArches: %q", o.TargetArches)
 }
 
 func stageCmd(rootOpts *rootOptions) *cobra.Command {
@@ -165,6 +183,16 @@ func runStage(rootOpts *rootOptions, o *stageOptions) error {
 		build.Options = &cloudbuild.BuildOptions{MachineType: "n1-highcpu-32"}
 	}
 
+	targetOSes, err := release.OSListFromString(o.TargetOSes)
+	if err != nil {
+		return fmt.Errorf("invalid --target-os list: %w", err)
+	}
+
+	targetArches, err := release.ArchListFromString(o.TargetArches, targetOSes)
+	if err != nil {
+		return fmt.Errorf("invalid --target-arch list: %w", err)
+	}
+
 	build.Substitutions["_CM_REPO"] = fmt.Sprintf("https://github.com/%s/%s.git", o.Org, o.Repo)
 	build.Substitutions["_CM_REF"] = o.GitRef
 	build.Substitutions["_RELEASE_VERSION"] = o.ReleaseVersion
@@ -173,6 +201,8 @@ func runStage(rootOpts *rootOptions, o *stageOptions) error {
 	build.Substitutions["_PUBLISHED_IMAGE_REPO"] = o.PublishedImageRepository
 	build.Substitutions["_KMS_KEY"] = o.SigningKMSKey
 	build.Substitutions["_SKIP_SIGNING"] = fmt.Sprintf("%v", o.SkipSigning)
+	build.Substitutions["_TARGET_OSES"] = strings.Join(targetOSes.List(), ",")
+	build.Substitutions["_TARGET_ARCHES"] = strings.Join(targetArches.List(), ",")
 
 	outputDir := ""
 	// If --release-version is not explicitly set, we treat this build as a

@@ -36,6 +36,8 @@ steps:
   - --bucket=${_RELEASE_BUCKET}
   - --signing-kms-key=${_KMS_KEY}
   - --skip-signing=${_SKIP_SIGNING}
+  - --target-os=${_TARGET_OSES}
+  - --target-arches=${_TARGET_ARCHES}
 
 tags:
 - "cert-manager-release-stage"
@@ -59,6 +61,9 @@ substitutions:
   # so we have to manually find an image with the desired version.
   _BAZEL_VERSION: 4.2.1
   _BAZEL_IMAGE_SHA: "sha256:9950b67658ab659f6efbe39f64e202f6f5bb15f7934b203f6132018410758d0c"
+  ## Options controlling which OSes and arches to build for where * means "all known"
+  _TARGET_OSES: "*"
+  _TARGET_ARCHES: "*"
   ## Options controlling the version of the release tooling used in the build.
   _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
   _RELEASE_REPO_REF: "master"
