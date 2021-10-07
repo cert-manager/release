@@ -174,7 +174,7 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	for name, tars := range rel.ComponentImageBundles {
 		log.Printf("Loading release images for component %q into local docker daemon...", name)
 		for _, t := range tars {
-			if err := docker.Load(t.Filepath()); err != nil {
+			if err := docker.Load(ctx, t.Filepath()); err != nil {
 				return err
 			}
 		}
@@ -251,7 +251,7 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 	for name, tars := range rel.ComponentImageBundles {
 		log.Printf("Pushing release images for component %q", name)
 		for _, t := range tars {
-			if err := docker.Push(t.ImageName()); err != nil {
+			if err := docker.Push(ctx, t.ImageName()); err != nil {
 				return err
 			}
 			log.Printf("Pushed release image %q", t.ImageName())
@@ -268,7 +268,7 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("Creating multi-arch manifest lists for image components")
 	for name, tars := range rel.ComponentImageBundles {
 		manifestListName := buildManifestListName(o.PublishedImageRepository, name, rel.ReleaseVersion)
-		if err := registry.CreateManifestList(manifestListName, tars); err != nil {
+		if err := registry.CreateManifestList(ctx, manifestListName, tars); err != nil {
 			return err
 		}
 		builtManifestLists = append(builtManifestLists, manifestListName)
@@ -277,7 +277,7 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("Pushing all multi-arch manifest lists")
 	for _, manifestListName := range builtManifestLists {
 		log.Printf("Pushing manifest list %q", manifestListName)
-		if err := docker.Command("", "manifest", "push", manifestListName); err != nil {
+		if err := docker.PushManifestList(ctx, manifestListName); err != nil {
 			return err
 		}
 		log.Printf("Pushed multi-arch manifest list %q", manifestListName)

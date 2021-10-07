@@ -14,19 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package docker
+package shell
 
 import (
+	"context"
 	"os"
 	"os/exec"
 )
 
-func runCmd(wd, cmd string, args ...string) error {
-	c := exec.Command(cmd, args...)
+// Command runs the given command with the given args
+func Command(ctx context.Context, workDir string, cmd string, args ...string) error {
+	c := exec.CommandContext(ctx, cmd, args...)
+
 	// redirect all output
 	// TODO: honour --debug flag
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
-	c.Dir = wd
+
+	c.Dir = workDir
+
 	return c.Run()
 }
