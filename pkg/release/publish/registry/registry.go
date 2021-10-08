@@ -17,44 +17,36 @@ limitations under the License.
 package registry
 
 import (
+	"context"
 	"log"
 
 	"github.com/cert-manager/release/pkg/release/docker"
 	"github.com/cert-manager/release/pkg/release/images"
 )
 
-func Push(image images.Tar) error {
-	return docker.Push(image.ImageName())
-}
-
-func CreateManifestList(name string, tars []images.Tar) error {
+func CreateManifestList(ctx context.Context, name string, tars []images.Tar) error {
 	imageNames := make([]string, len(tars))
 	for i, t := range tars {
 		imageNames[i] = t.ImageName()
 	}
+
 	log.Printf("Creating manifest list %q", name)
-	if err := docker.Command("", append([]string{"manifest", "create", name}, imageNames...)...); err != nil {
+	if err := docker.CreateManifestList(ctx, name, imageNames); err != nil {
 		log.Printf("Failed to create manifest list with name %q - ensure no existing manifest list exists with the same name, and ensure all member images are pushed to the remote registry.", name)
 		return err
 	}
+
 	for _, t := range tars {
 		a := manifestListAnnotationsForOSArch(t.OS(), t.Architecture())
 		log.Printf("Annotating image %q with os=%q, arch=%q, variant=%q", t.ImageName(), a.os, a.arch, a.variant)
-		if err := docker.Command("", "manifest", "annotate", name, t.ImageName(),
-			"--os", a.os,
-			"--arch", a.arch,
-			"--variant", a.variant); err != nil {
+		if err := docker.AnnotateManifestList(ctx, name, t.ImageName(), a.os, a.arch, a.variant); err != nil {
 			log.Printf("Failed to annotate manifest list with os/arch information.")
 			return err
 		}
 	}
+
 	log.Printf("Created manifest list %q", name)
-
 	return nil
-}
-
-func PushManifestList(name string) error {
-	return docker.Command("", "manifest", "push", name)
 }
 
 type manifestAnnotation struct {
