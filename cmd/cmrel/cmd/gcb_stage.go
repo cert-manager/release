@@ -81,6 +81,12 @@ type gcbStageOptions struct {
 	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/cryptoKeyVersions/<KEY_VERSION>
 	// This must be set if SkipSigning is not set to true
 	SigningKMSKey string
+
+	// TargetOSes is a comma-separated list of OSes which should be built for in this invocation
+	TargetOSes string
+
+	// TargetArches is a comma-separated list of architectures which should be built for in this invocation
+	TargetArches string
 }
 
 func (o *gcbStageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
@@ -91,6 +97,14 @@ func (o *gcbStageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) 
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", "", "Full name of the GCP KMS key to use for signing")
 	fs.BoolVar(&o.SkipPush, "skip-push", false, "Skip pushing the staged release to a GCS bucket.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing release artifacts.")
+
+	allOSList := release.AllOSes()
+
+	allOSes := strings.Join(allOSList.List(), ", ")
+	allArches := strings.Join(release.AllArchesForOSes(allOSList).List(), ", ")
+
+	fs.StringVar(&o.TargetOSes, "target-os", "*", fmt.Sprintf("Comma-separated list of OSes to target, or '*' for all. Options: %s", allOSes))
+	fs.StringVar(&o.TargetArches, "target-arch", "*", fmt.Sprintf("Comma-separated list of arches to target, or '*' for all. Options: %s", allArches))
 }
 
 func (o *gcbStageOptions) print() {
@@ -101,6 +115,8 @@ func (o *gcbStageOptions) print() {
 	log.Printf("  SkipSigning: %v", o.SkipSigning)
 	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
 	log.Printf("  ReleaseVersion: %q", o.ReleaseVersion)
+	log.Printf("  TargetOSes: %q", o.TargetOSes)
+	log.Printf("  TargetArches: %q", o.TargetArches)
 }
 
 func gcbStageCmd(rootOpts *rootOptions) *cobra.Command {
@@ -160,39 +176,47 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 	// of all the artifacts that were built during a `bazel run` invocation.
 	// This will mean we don't have to update this release tool whenever we add an additional
 	// release artifact.
-	osTargets := release.AllOSes()
 
-	for _, osVariant := range osTargets {
-		for _, arch := range release.ArchitecturesPerOS[osVariant] {
-			log.Printf("Building %q target for %q OS for %q architecture", release.TarsBazelTarget, osVariant, arch)
-			if err := runBazel(o.RepoPath, bazelBuildEnv(o), "build", "--stamp", platformFlagForOSArch(osVariant, arch), release.TarsBazelTarget); err != nil {
-				return fmt.Errorf("failed building release artifacts for architecture %q: %w", arch, err)
-			}
-		}
+	targetOSes, err := release.OSListFromString(o.TargetOSes)
+	if err != nil {
+		return fmt.Errorf("invalid --target-os list: %w", err)
+	}
+
+	targetArches, err := release.ArchListFromString(o.TargetArches, targetOSes)
+	if err != nil {
+		return fmt.Errorf("invalid --target-arch list: %w", err)
 	}
 
 	var artifacts []release.ArtifactMetadata
 
-	// build cert-manager container images
-	for osVariant, archs := range release.ServerPlatforms {
-		for _, arch := range archs {
-			// create an artifact for the arch specific 'server' release tarball
-			artifactName := fmt.Sprintf("cert-manager-server-linux-%s.tar.gz", arch)
-			// Add the arch-specific .tar.gz file to the list of artifacts
-			if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
-				return err
+	for _, osVariant := range targetOSes.List() {
+		for _, arch := range release.ArchitecturesPerOS[osVariant] {
+			if !targetArches.Has(arch) {
+				continue
 			}
-		}
-	}
 
-	// build cert-manager kubectl plugin binaries
-	for osVariant, archs := range release.ClientPlatforms {
-		for _, arch := range archs {
-			// create an artifact for the os and arch specific 'ctl' release tarball
-			artifactName := fmt.Sprintf("cert-manager-kubectl-cert_manager-%s-%s.tar.gz", osVariant, arch)
-			// Add the arch-specific .tar.gz file to the list of artifacts
-			if err := appendArtifact(&artifacts, o.RepoPath, artifactName, osVariant, arch); err != nil {
-				return err
+			log.Printf("Building %q target for %q OS for %q architecture", release.TarsBazelTarget, osVariant, arch)
+
+			if err := runBazel(o.RepoPath, bazelBuildEnv(o), "build", "--stamp", platformFlagForOSArch(osVariant, arch), release.TarsBazelTarget); err != nil {
+				return fmt.Errorf("failed building release artifacts for architecture %q: %w", arch, err)
+			}
+
+			if release.IsServerOS(osVariant) {
+				// add an artifact for the arch specific 'server' release tarball
+				serverArtifactName := fmt.Sprintf("cert-manager-server-linux-%s.tar.gz", arch)
+				// Add the arch-specific .tar.gz file to the list of artifacts
+				if err := appendArtifact(&artifacts, o.RepoPath, serverArtifactName, osVariant, arch); err != nil {
+					return err
+				}
+			}
+
+			if release.IsClientOS(osVariant) {
+				// add an artifact for the os and arch specific 'ctl' release tarball
+				clientArtifactName := fmt.Sprintf("cert-manager-kubectl-cert_manager-%s-%s.tar.gz", osVariant, arch)
+				// Add the arch-specific .tar.gz file to the list of artifacts
+				if err := appendArtifact(&artifacts, o.RepoPath, clientArtifactName, osVariant, arch); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -206,7 +230,7 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 		return sign.CertManagerManifests(ctx, o.SigningKMSKey, path)
 	}
 
-	// build 'manifests' (helm chart, k8s YAML manifests)
+	// add 'manifests' (helm chart, k8s YAML manifests)
 	if err := appendArtifactWithPostprocess(&artifacts, o.RepoPath, "cert-manager-manifests.tar.gz", "", "", manifestPostProcessor); err != nil {
 		return err
 	}
