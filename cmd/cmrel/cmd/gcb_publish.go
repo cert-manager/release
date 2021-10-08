@@ -17,11 +17,14 @@ limitations under the License.
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -29,6 +32,8 @@ import (
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"golang.org/x/oauth2"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/utils/pointer"
 
 	"github.com/cert-manager/release/pkg/release"
 	"github.com/cert-manager/release/pkg/release/docker"
@@ -51,6 +56,8 @@ The GitHub token to use to create the draft release should be set using the
 GITHUB_TOKEN environment variable.
 `
 )
+
+type publishAction func(context.Context, *gcbPublishOptions, *release.Unpacked) error
 
 type gcbPublishOptions struct {
 	// The name of the GCS bucket to stage the release to.
@@ -87,6 +94,71 @@ type gcbPublishOptions struct {
 	// PublishedGitHubRepo is the repo name in the provided org where the
 	// release will be published to.
 	PublishedGitHubRepo string
+
+	// PublishActions list of publishing actions to take
+	PublishActions []string
+
+	// manualActionLogger logs to a buffer and is used by publish actions to log any manual
+	// actions that must be taken by the user even after a successful publish is completed.
+	// Get the log contents with ManualActionText()
+	manualActionLogger *log.Logger
+
+	manualActionBuffer bytes.Buffer
+}
+
+// NewGCBPublishOptions creates options and initializes loggers correctly
+func NewGCBPublishOptions() *gcbPublishOptions {
+	o := &gcbPublishOptions{}
+
+	o.manualActionLogger = log.New(&o.manualActionBuffer, "* ", 0)
+
+	return o
+}
+
+// ManualActionText returns a string containing any manual actions which have been logged using ManualActionLogger
+func (o *gcbPublishOptions) ManualActionText() string {
+	return o.manualActionBuffer.String()
+}
+
+// PublishActionList constructs a slice of artifact publishing functions based on the values
+// listed in o.PublishActions.
+func (o *gcbPublishOptions) PublishActionList() ([]publishAction, error) {
+	actionNames, err := canonicalizeAndVerifyPublishActions(o.PublishActions)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(actionNames) == 0 {
+		return nil, fmt.Errorf("no artifacts to be published; nothing to do")
+	}
+
+	actionFuncs := make([]publishAction, len(actionNames))
+
+	for i, action := range actionNames {
+		// don't check if it's in map since we checked in canonicalizeAndVerifyPublishActions
+		actionFuncs[i] = publishActionMap[action]
+	}
+
+	return actionFuncs, nil
+}
+
+func (o *gcbPublishOptions) GitHubClient(ctx context.Context) (*github.Client, error) {
+	// construct the GitHub API client
+	// The GITHUB_TOKEN must be a GitHub personal access token with at least
+	// `repo` privileges and the associated user must have permission to create
+	// branches and PRs at the Helm GitHub repository.
+	githubToken := os.Getenv("GITHUB_TOKEN")
+	if githubToken == "" {
+		return nil, fmt.Errorf("GITHUB_TOKEN environment variable not set - a token is always required to create a release")
+	}
+
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: githubToken},
+	)
+
+	tc := oauth2.NewClient(ctx, ts)
+
+	return github.NewClient(tc), nil
 }
 
 func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
@@ -99,6 +171,7 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
+	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 }
 
 func (o *gcbPublishOptions) print() {
@@ -112,10 +185,64 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
+	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
+}
+
+func allPublishActionNames() []string {
+	names := make([]string, len(publishActionMap))
+	i := 0
+	for k := range publishActionMap {
+		names[i] = k
+		i++
+	}
+
+	sort.Strings(names)
+	return names
+}
+
+// canonicalizeAndVerifyPublishActions converts a list of raw actions into
+// a slice of canonical action names (whitespace removed, lowercased), returning an error
+// if any of the actions don't correspond to known actions. Supports removing actions via a prefix of "-"
+// Actions are returned in alphabetical order
+func canonicalizeAndVerifyPublishActions(rawActions []string) ([]string, error) {
+	actions := sets.NewString()
+
+	for _, rawAction := range rawActions {
+		action := strings.ToLower(strings.TrimSpace(rawAction))
+
+		if len(action) == 0 {
+			continue
+		}
+
+		if action == "*" {
+			actions = actions.Insert(allPublishActionNames()...)
+			continue
+		}
+
+		_, ok := publishActionMap[strings.TrimPrefix(action, "-")]
+		if !ok {
+			return nil, fmt.Errorf("unknown action %q", rawAction)
+		}
+
+		if strings.HasPrefix(action, "-") {
+			actions = actions.Delete(strings.TrimPrefix(action, "-"))
+		} else {
+			actions = actions.Insert(action)
+		}
+	}
+
+	return actions.List(), nil
+}
+
+var publishActionMap map[string]publishAction = map[string]publishAction{
+	"helmchartpr":     pushHelmChartPR,
+	"githubrelease":   pushGitHubRelease,
+	"containerimages": pushContainerImages,
 }
 
 func gcbPublishCmd(rootOpts *rootOptions) *cobra.Command {
-	o := &gcbPublishOptions{}
+	o := NewGCBPublishOptions()
+
 	cmd := &cobra.Command{
 		Use:          gcbPublishCommand,
 		Short:        gcbPublishDescription,
@@ -135,6 +262,9 @@ func gcbPublishCmd(rootOpts *rootOptions) *cobra.Command {
 
 func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	ctx := context.Background()
+
+	// fetch the staged release from GCS
+
 	gcs, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create GCS client: %w", err)
@@ -185,28 +315,35 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 		return nil
 	}
 
-	// wrap errors from pushRelease to ensure we log a big warning message if
-	// one is returned to inform users that a half-released version may be out.
-	return errorDuringPublish(pushRelease(o, rel))
+	log.Printf("!!! Publishing release artifacts to public repositories !!!")
+
+	// TODO: perform check to ensure we have permission to create releases
+
+	publishFuncs, err := o.PublishActionList()
+	if err != nil {
+		return fmt.Errorf("failed to parse published artifacts list: %w", err)
+	}
+
+	for _, publishFunc := range publishFuncs {
+		err = publishFunc(ctx, o, rel)
+
+		if err != nil {
+			return errorDuringPublish(err)
+		}
+	}
+
+	log.Println()
+	log.Printf("+++++++++ Publishing release completed successfully! +++++++++")
+	log.Printf("You MUST now perform the following manual tasks:\n%s", o.ManualActionText())
+
+	return nil
 }
 
-func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
-	log.Printf("!!! Publishing release artifacts to public repositories !!!")
-	ctx := context.TODO()
-
-	// construct the GitHub API client
-	// The GITHUB_TOKEN must be a GitHub personal access token with at least
-	// `repo` privileges and the associated user must have permission to create
-	// branches and PRs at the Helm GitHub repository.
-	githubToken := os.Getenv("GITHUB_TOKEN")
-	if githubToken == "" {
-		return fmt.Errorf("GITHUB_TOKEN environment variable not set - a token is always required to create a release")
+func pushHelmChartPR(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
+	githubClient, err := o.GitHubClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create github client for pushing helm chart PR: %w", err)
 	}
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: githubToken},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-	githubClient := github.NewClient(tc)
 
 	helmRepo := helm.NewGitHubRepositoryManager(
 		&helm.GitHubClient{
@@ -223,7 +360,23 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 		return fmt.Errorf("error in preflight checks for Helm GitHub repository: %v", err)
 	}
 
-	// TODO: perform check to ensure we have permission to create releases
+	log.Printf("Pushing Helm chart(s)")
+
+	prURLForHelmCharts, err := helmRepo.Publish(ctx, rel.ReleaseName, rel.Charts...)
+	if err != nil {
+		return err
+	}
+
+	o.manualActionLogger.Printf("Review and merge the GitHub PR containing the Helm charts: %s", prURLForHelmCharts)
+
+	return nil
+}
+
+func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
+	githubClient, err := o.GitHubClient(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create github client for creating github release: %w", err)
+	}
 
 	// open manifest files ahead of time to ensure they are available on disk
 	manifestsByName := map[string]*os.File{}
@@ -247,6 +400,59 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 		ctlBinariesByName[fmt.Sprintf("kubectl-cert_manager-%s-%s.tar.gz", binaryTar.OS(), binaryTar.Architecture())] = f
 	}
 
+	log.Printf("Creating a draft GitHub release %q in repository %s/%s", rel.ReleaseVersion, o.PublishedGitHubOrg, o.PublishedGitHubRepo)
+
+	defaultReleaseBody := "!!! Update this release note body before publishing this draft release!"
+	githubRelease, resp, err := githubClient.Repositories.CreateRelease(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, &github.RepositoryRelease{
+		TagName:         &rel.ReleaseVersion,
+		TargetCommitish: &rel.GitCommitRef,
+		Name:            &rel.ReleaseVersion,
+		Body:            &defaultReleaseBody,
+		Draft:           pointer.Bool(true),
+		// TODO: determine whether this ReleaseVersion is a 'prerelease'
+		Prerelease: nil,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create GitHub release: %v", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("unexpected response code when creating GitHub release %d", resp.StatusCode)
+	}
+
+	log.Printf("Uploading %d release manifests to GitHub release", len(manifestsByName))
+	for name, f := range manifestsByName {
+		asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
+			Name: name,
+		}, f)
+		if err != nil {
+			return fmt.Errorf("failed to upload github release asset: %v", err)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			return fmt.Errorf("unexpected response code when uploading github release asset %d", resp.StatusCode)
+		}
+		log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
+	}
+
+	log.Printf("Uploading %d release binary tars to GitHub release", len(ctlBinariesByName))
+	for name, f := range ctlBinariesByName {
+		asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
+			Name: name,
+		}, f)
+		if err != nil {
+			return fmt.Errorf("failed to upload github release asset: %v", err)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+			return fmt.Errorf("unexpected response code when uploading github release asset %d", resp.StatusCode)
+		}
+		log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
+	}
+
+	o.manualActionLogger.Printf("Update the GitHub release with release notes and hit PUBLISH!")
+	return nil
+}
+
+func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("Pushing arch-specific docker images")
 	for name, tars := range rel.ComponentImageBundles {
 		log.Printf("Pushing release images for component %q", name)
@@ -283,64 +489,8 @@ func pushRelease(o *gcbPublishOptions, rel *release.Unpacked) error {
 		log.Printf("Pushed multi-arch manifest list %q", manifestListName)
 	}
 
-	log.Printf("Pushing Helm chart(s)")
-	prURLForHelmCharts, err := helmRepo.Publish(ctx, rel.ReleaseName, rel.Charts...)
-	if err != nil {
-		return err
-	}
+	// TODO: sign images here and push signatures
 
-	log.Printf("Creating a draft GitHub release %q in repository %s/%s", rel.ReleaseVersion, o.PublishedGitHubOrg, o.PublishedGitHubRepo)
-	trueBool := true
-	defaultReleaseBody := "!!! Update this release note body before publishing this draft release!"
-	githubRelease, resp, err := githubClient.Repositories.CreateRelease(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, &github.RepositoryRelease{
-		TagName:         &rel.ReleaseVersion,
-		TargetCommitish: &rel.GitCommitRef,
-		Name:            &rel.ReleaseVersion,
-		Body:            &defaultReleaseBody,
-		Draft:           &trueBool,
-		// TODO: determine whether this ReleaseVersion is a 'prerelease'
-		Prerelease: nil,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create GitHub release: %v", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("unexpected response code when creating GitHub release %d", resp.StatusCode)
-	}
-
-	log.Printf("Uploading %d release manifests to GitHub release", len(manifestsByName))
-	for name, f := range manifestsByName {
-		asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
-			Name: name,
-		}, f)
-		if err != nil {
-			return fmt.Errorf("failed to upload github release asset: %v", err)
-		}
-		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return fmt.Errorf("unexpected response code when uploading github release asset %d", resp.StatusCode)
-		}
-		log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
-	}
-
-	log.Printf("Uploading %d release binary tars to GitHub release", len(ctlBinariesByName))
-	for name, f := range ctlBinariesByName {
-		asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
-			Name: name,
-		}, f)
-		if err != nil {
-			return fmt.Errorf("failed to upload github release asset: %v", err)
-		}
-		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return fmt.Errorf("unexpected response code when uploading github release asset %d", resp.StatusCode)
-		}
-		log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
-	}
-
-	log.Println()
-	log.Printf("+++++++++ Publishing release completed successfully! +++++++++")
-	log.Printf("You MUST now perform the following manual tasks:")
-	log.Printf("* Update the GitHub release with release notes and hit PUBLISH!")
-	log.Printf("* Review and merge the GitHub PR containing the Helm charts: %s", prURLForHelmCharts)
 	return nil
 }
 

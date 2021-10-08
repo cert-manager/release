@@ -59,6 +59,7 @@ steps:
   - --published-helm-chart-github-repo=${_PUBLISHED_HELM_CHART_GITHUB_REPO}
   - --published-helm-chart-github-branch=${_PUBLISHED_HELM_CHART_GITHUB_BRANCH}
   - --published-image-repo=${_PUBLISHED_IMAGE_REPO}
+  - --publish-actions=${_PUBLISH_ACTIONS}
 
 tags:
 - "cert-manager-release-publish"
@@ -81,5 +82,7 @@ substitutions:
   _PUBLISHED_HELM_CHART_GITHUB_REPO: ""
   _PUBLISHED_HELM_CHART_GITHUB_BRANCH: ""
   _PUBLISHED_IMAGE_REPO: ""
+  ## Used to control the exact artifacts which will be published
+  _PUBLISH_ACTIONS: "*"
   ## Used as a tag to identify the build more easily later
   _TAG_RELEASE_NAME: ""

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"cloud.google.com/go/storage"
 	"github.com/spf13/cobra"
@@ -90,6 +91,10 @@ type publishOptions struct {
 	// PublishedGitHubRepo is the repo name in the provided org where the
 	// release will be published to.
 	PublishedGitHubRepo string
+
+	// PublishActions is a list of publishing actions which should be taken,
+	// or else "*" - the default - to mean "all actions"
+	PublishActions []string
 }
 
 func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
@@ -105,6 +110,7 @@ func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
+	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Order of operations is preserved if given, or is alphabetical by default. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 }
 
 func (o *publishOptions) print() {
@@ -120,6 +126,7 @@ func (o *publishOptions) print() {
 	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
+	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
 }
 
 func publishCmd(rootOpts *rootOptions) *cobra.Command {
@@ -144,6 +151,7 @@ func publishCmd(rootOpts *rootOptions) *cobra.Command {
 
 func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	ctx := context.Background()
+
 	gcs, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create GCS client: %w", err)
@@ -162,6 +170,12 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 		return fmt.Errorf("error loading cloudbuild.yaml file: %w", err)
 	}
 
+	// make sure that publish-actions is valid
+	_, err = canonicalizeAndVerifyPublishActions(o.PublishActions)
+	if err != nil {
+		return fmt.Errorf("invalid publish-actions: %w", err)
+	}
+
 	build.Substitutions["_RELEASE_NAME"] = o.ReleaseName
 	build.Substitutions["_RELEASE_BUCKET"] = o.Bucket
 	build.Substitutions["_NO_MOCK"] = fmt.Sprintf("%t", o.NoMock)
@@ -171,6 +185,7 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_REPO"] = o.PublishedHelmChartGitHubRepo
 	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_BRANCH"] = o.PublishedHelmChartGitHubBranch
 	build.Substitutions["_PUBLISHED_IMAGE_REPO"] = o.PublishedImageRepository
+	build.Substitutions["_PUBLISH_ACTIONS"] = strings.Join(o.PublishActions, ",")
 
 	log.Printf("DEBUG: building google cloud build API client")
 	svc, err := cloudbuild.NewService(ctx)
