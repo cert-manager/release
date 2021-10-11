@@ -34,6 +34,7 @@ clean:
 .PHONY: test
 test:
 	@# TODO: this should be go test ./... but one of the tests was broken a while back and needs fixing first
+	go test ./cmd/cmrel/cmd/...
 	go test ./pkg/release
 	go test ./pkg/release/helm
 	go test ./pkg/release/manifests
