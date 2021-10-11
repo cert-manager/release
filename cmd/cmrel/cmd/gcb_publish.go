@@ -40,6 +40,7 @@ import (
 	"github.com/cert-manager/release/pkg/release/helm"
 	"github.com/cert-manager/release/pkg/release/publish/registry"
 	"github.com/cert-manager/release/pkg/release/validation"
+	"github.com/cert-manager/release/pkg/sign/cosign"
 )
 
 const (
@@ -94,6 +95,14 @@ type gcbPublishOptions struct {
 	// PublishedGitHubRepo is the repo name in the provided org where the
 	// release will be published to.
 	PublishedGitHubRepo string
+
+	// SkipSigning, if true, will skip trying to sign artifacts using KMS
+	SkipSigning bool
+
+	// SigningKMSKey is the full name of the GCP KMS key to be used for signing, e.g.
+	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/versions/<KEY_VERSION>
+	// This must be set if SkipSigning is not set to true
+	SigningKMSKey string
 
 	// PublishActions list of publishing actions to take
 	PublishActions []string
@@ -171,6 +180,8 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
+	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", "", "Full name of the GCP KMS key to use for signing.")
+	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 }
 
@@ -185,6 +196,8 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
+	log.Printf("  SkipSigning: %v", o.SkipSigning)
+	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
 }
 
@@ -235,9 +248,9 @@ func canonicalizeAndVerifyPublishActions(rawActions []string) ([]string, error) 
 }
 
 var publishActionMap map[string]publishAction = map[string]publishAction{
-	"helmchartpr":     pushHelmChartPR,
-	"githubrelease":   pushGitHubRelease,
-	"containerimages": pushContainerImages,
+	"helmchartpr":         pushHelmChartPR,
+	"githubrelease":       pushGitHubRelease,
+	"pushcontainerimages": pushContainerImages,
 }
 
 func gcbPublishCmd(rootOpts *rootOptions) *cobra.Command {
@@ -264,7 +277,6 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	ctx := context.Background()
 
 	// fetch the staged release from GCS
-
 	gcs, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create GCS client: %w", err)
@@ -454,6 +466,13 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 
 func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("Pushing arch-specific docker images")
+
+	if o.SigningKMSKey == "" && !o.SkipSigning {
+		return fmt.Errorf("must set signing-kms-key or skip-signing in order to sign images")
+	}
+
+	var pushedImages []string
+
 	for name, tars := range rel.ComponentImageBundles {
 		log.Printf("Pushing release images for component %q", name)
 		for _, t := range tars {
@@ -461,6 +480,7 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 				return err
 			}
 			log.Printf("Pushed release image %q", t.ImageName())
+			pushedImages = append(pushedImages, t.ImageName())
 			// Wait 2 seconds to avoid being rate limited by the registry.
 			time.Sleep(time.Second * 2)
 		}
@@ -486,10 +506,29 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 		if err := docker.PushManifestList(ctx, manifestListName); err != nil {
 			return err
 		}
+
 		log.Printf("Pushed multi-arch manifest list %q", manifestListName)
 	}
 
-	// TODO: sign images here and push signatures
+	if err := signContainerImages(ctx, o, pushedImages); err != nil {
+		return fmt.Errorf("failed to sign images: %w", err)
+	}
+
+	return nil
+}
+
+func signContainerImages(ctx context.Context, o *gcbPublishOptions, imagesToSign []string) error {
+	if o.SkipSigning {
+		log.Println("Skipping signing container images as skip-signing is set")
+		return nil
+	}
+
+	log.Printf("Signing container images")
+	if err := cosign.Sign(ctx, imagesToSign, o.SigningKMSKey); err != nil {
+		return fmt.Errorf("failed to sign all container images: %w", err)
+	}
+
+	log.Printf("Signed container images: %s", strings.Join(imagesToSign, ", "))
 
 	return nil
 }
