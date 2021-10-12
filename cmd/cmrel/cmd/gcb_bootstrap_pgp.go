@@ -89,7 +89,7 @@ func gcbBootstrapPGPCmd(rootOpts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-func getPEMPubkey(ctx context.Context, key string) (string, error) {
+func getPEMPubkey(ctx context.Context, key sign.GCPKMSKey) (string, error) {
 	oauthClient, err := google.DefaultClient(ctx, cloudkms.CloudPlatformScope)
 	if err != nil {
 		return "", fmt.Errorf("could not create GCP OAuth2 client: %w", err)
@@ -100,7 +100,7 @@ func getPEMPubkey(ctx context.Context, key string) (string, error) {
 		return "", fmt.Errorf("could not create GCP KMS client: %w", err)
 	}
 
-	res, err := svc.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.GetPublicKey(key).Do()
+	res, err := svc.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.GetPublicKey(key.GCPFormat()).Do()
 	if err != nil {
 		return "", fmt.Errorf("could not get public key from Google Cloud KMS API: %w", err)
 	}
@@ -111,12 +111,17 @@ func getPEMPubkey(ctx context.Context, key string) (string, error) {
 func runGCBBootstrapPGP(rootOpts *rootOptions, o *gcbBootstrapPGPOptions) error {
 	ctx := context.Background()
 
-	armoredKey, err := sign.BootstrapPGPFromGCP(ctx, o.Key)
+	parsedKey, err := sign.NewGCPKMSKey(o.Key)
+	if err != nil {
+		return err
+	}
+
+	armoredKey, err := sign.BootstrapPGPFromGCP(ctx, parsedKey)
 	if err != nil {
 		return fmt.Errorf("failed to bootstrap PGP identity using %q: %w", o.Key, err)
 	}
 
-	pemPubkey, err := getPEMPubkey(ctx, o.Key)
+	pemPubkey, err := getPEMPubkey(ctx, parsedKey)
 	if err != nil {
 		return fmt.Errorf("failed to get pubkey for %q: %w", o.Key, err)
 	}

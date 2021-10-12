@@ -95,7 +95,12 @@ func signManifestsCmd(rootOpts *rootOptions) *cobra.Command {
 func runSignManifests(rootOpts *rootOptions, o *signManifestsOptions) error {
 	ctx := context.Background()
 
-	err := sign.CertManagerManifests(ctx, o.Key, o.Path)
+	parsedKey, err := sign.NewGCPKMSKey(o.Key)
+	if err != nil {
+		return err
+	}
+
+	err = sign.CertManagerManifests(ctx, parsedKey, o.Path)
 	if err != nil {
 		return fmt.Errorf("failed to complete signing of %q: %w", o.Path, err)
 	}

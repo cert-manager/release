@@ -18,21 +18,17 @@ package cosign
 
 import (
 	"context"
-	"strings"
 
 	"github.com/cert-manager/release/pkg/shell"
+	"github.com/cert-manager/release/pkg/sign"
 )
 
 // Sign calls out to cosign to sign a given container using the provided GCP key.
-func Sign(ctx context.Context, containers []string, key string) error {
-	if !strings.HasPrefix(key, "gcpkms://") {
-		key = "gcpkms://" + key
-	}
-
+func Sign(ctx context.Context, containers []string, key sign.GCPKMSKey) error {
 	args := append([]string{
 		"sign",
 		"-key",
-		key,
+		key.CosignFormat(),
 	}, containers...)
 
 	return shell.Command(ctx, "", "cosign", args...)

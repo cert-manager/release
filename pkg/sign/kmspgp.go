@@ -56,7 +56,7 @@ type PGPArmoredBlock string
 // BootstrapPGPFromGCP creates a new PGP public key with a hardcoded cert-manager identity,
 // signed using a named GCP KMS key. The KMS key can then be used for code signing, and the
 // public key distributed for verification purposes.
-func BootstrapPGPFromGCP(ctx context.Context, key string) (PGPArmoredBlock, error) {
+func BootstrapPGPFromGCP(ctx context.Context, key GCPKMSKey) (PGPArmoredBlock, error) {
 	// Largely taken from:
 	// https://github.com/heptiolabs/google-kms-pgp/blob/89c17dd5877a5c0f98f1906444b831dd2352b365/main.go#L131-L209
 	entity, packetCfg, err := deriveEntity(ctx, key)
@@ -121,17 +121,13 @@ func BootstrapPGPFromGCP(ctx context.Context, key string) (PGPArmoredBlock, erro
 // deriveEntity creates a PGP entity from the given key; the entity wraps a private key and an
 // identity and can be used for signing either the key itself or other charts. The openpgp packet
 // config is also returned.
-func deriveEntity(ctx context.Context, key string) (*openpgp.Entity, *packet.Config, error) {
+func deriveEntity(ctx context.Context, key GCPKMSKey) (*openpgp.Entity, *packet.Config, error) {
 	// Largely taken from:
 	// https://github.com/heptiolabs/google-kms-pgp/blob/89c17dd5877a5c0f98f1906444b831dd2352b365/main.go#L320-L356
 
 	// The DefaultHash needs to be SHA512 for helm
 	cfg := &packet.Config{
 		DefaultHash: crypto.SHA512,
-	}
-
-	if key == "" {
-		return nil, nil, fmt.Errorf("missing required KMS key for deriving a PGP identity")
 	}
 
 	oauthClient, err := google.DefaultClient(ctx, cloudkms.CloudPlatformScope)
@@ -144,7 +140,7 @@ func deriveEntity(ctx context.Context, key string) (*openpgp.Entity, *packet.Con
 		return nil, nil, fmt.Errorf("could not create GCP KMS client: %w", err)
 	}
 
-	signer, err := kmssigner.NewWithExplicitMetadata(svc, key, cfg.DefaultHash, staticKeyCreationTime)
+	signer, err := kmssigner.NewWithExplicitMetadata(svc, key.GCPFormat(), cfg.DefaultHash, staticKeyCreationTime)
 	if err != nil {
 		return nil, nil, fmt.Errorf("could not create KMS signer: %w", err)
 	}

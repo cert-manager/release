@@ -146,6 +146,12 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 		return fmt.Errorf("failed to read git ref from repository: %v", err)
 	}
 
+	if o.SigningKMSKey != "" {
+		if _, err := sign.NewGCPKMSKey(o.SigningKMSKey); err != nil {
+			return err
+		}
+	}
+
 	if o.ReleaseVersion != "" {
 		if err := runGit(o.RepoPath, "tag", "-f", o.ReleaseVersion); err != nil {
 			return err
@@ -227,7 +233,12 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 			return nil
 		}
 
-		return sign.CertManagerManifests(ctx, o.SigningKMSKey, path)
+		parsedKey, err := sign.NewGCPKMSKey(o.SigningKMSKey)
+		if err != nil {
+			return err
+		}
+
+		return sign.CertManagerManifests(ctx, parsedKey, path)
 	}
 
 	// add 'manifests' (helm chart, k8s YAML manifests)

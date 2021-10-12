@@ -37,11 +37,7 @@ const manifestLocation = "deploy/chart/cert-manager.tgz"
 // the helm chart located at "deploy/chart/cert-manager.tgz" is signed, and a
 // signature "deploy/chart/cert-manager.tgz.prov" will be added.
 // The cert-manifests.tar.gz file is changed in-place.
-func CertManagerManifests(ctx context.Context, key string, path string) error {
-	if key == "" {
-		return fmt.Errorf("can't sign manifests without a signing key specified")
-	}
-
+func CertManagerManifests(ctx context.Context, key GCPKMSKey, path string) error {
 	// 1. Create temp dir for chart archive to be extracted to
 	// (Helm signing requires a filename, not a reader, so we have to write to disk here)
 	tmpDest, err := os.MkdirTemp("", "cmrel-extracted-manifests-")

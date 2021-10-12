@@ -49,7 +49,7 @@ var signHelmExample = fmt.Sprintf(`To sign a chart called "mychart.tgz":
 %s %s %s --key "projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/cryptoKeyVersions/<KEY_VERSION>" --chartpath mychart.tgz`, rootCommand, signCommand, signHelmCommand)
 
 type signHelmOptions struct {
-	// Key is the full name of the GCP KMS key to be used for signing, e.g.
+	// Key is the full name of the GCP KMS key to be used, e.g.
 	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/cryptoKeyVersions/<KEY_VERSION>
 	Key string
 
@@ -95,7 +95,12 @@ func signHelmCmd(rootOpts *rootOptions) *cobra.Command {
 func runSignHelm(rootOpts *rootOptions, o *signHelmOptions) error {
 	ctx := context.Background()
 
-	signatureBytes, err := sign.HelmChart(ctx, o.Key, o.ChartPath)
+	parsedKey, err := sign.NewGCPKMSKey(o.Key)
+	if err != nil {
+		return err
+	}
+
+	signatureBytes, err := sign.HelmChart(ctx, parsedKey, o.ChartPath)
 	if err != nil {
 		return fmt.Errorf("failed to sign: %w", err)
 	}

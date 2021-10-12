@@ -40,6 +40,7 @@ import (
 	"github.com/cert-manager/release/pkg/release/helm"
 	"github.com/cert-manager/release/pkg/release/publish/registry"
 	"github.com/cert-manager/release/pkg/release/validation"
+	"github.com/cert-manager/release/pkg/sign"
 	"github.com/cert-manager/release/pkg/sign/cosign"
 )
 
@@ -275,6 +276,12 @@ func gcbPublishCmd(rootOpts *rootOptions) *cobra.Command {
 
 func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	ctx := context.Background()
+
+	if o.SigningKMSKey != "" {
+		if _, err := sign.NewGCPKMSKey(o.SigningKMSKey); err != nil {
+			return err
+		}
+	}
 
 	// fetch the staged release from GCS
 	gcs, err := storage.NewClient(ctx)
@@ -524,7 +531,13 @@ func signContainerImages(ctx context.Context, o *gcbPublishOptions, imagesToSign
 	}
 
 	log.Printf("Signing container images")
-	if err := cosign.Sign(ctx, imagesToSign, o.SigningKMSKey); err != nil {
+
+	parsedKey, err := sign.NewGCPKMSKey(o.SigningKMSKey)
+	if err != nil {
+		return err
+	}
+
+	if err := cosign.Sign(ctx, imagesToSign, parsedKey); err != nil {
 		return fmt.Errorf("failed to sign all container images: %w", err)
 	}
 
