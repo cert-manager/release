@@ -37,7 +37,7 @@ steps:
   - --signing-kms-key=${_KMS_KEY}
   - --skip-signing=${_SKIP_SIGNING}
   - --target-os=${_TARGET_OSES}
-  - --target-arches=${_TARGET_ARCHES}
+  - --target-arch=${_TARGET_ARCHES}
 
 tags:
 - "cert-manager-release-stage"
