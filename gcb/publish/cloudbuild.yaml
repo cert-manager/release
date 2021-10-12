@@ -61,6 +61,8 @@ steps:
   - --published-helm-chart-github-branch=${_PUBLISHED_HELM_CHART_GITHUB_BRANCH}
   - --published-image-repo=${_PUBLISHED_IMAGE_REPO}
   - --publish-actions=${_PUBLISH_ACTIONS}
+  - --signing-kms-key=${_KMS_KEY}
+  - --skip-signing=${_SKIP_SIGNING}
 
 tags:
 - "cert-manager-release-publish"
@@ -72,6 +74,8 @@ substitutions:
   ## Required parameters
   _RELEASE_NAME: ""
   ## Optional/defaulted parameters
+  _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/versions/1"
+  _SKIP_SIGNING: "false"
   _RELEASE_BUCKET: ""
   ## Options controlling the version of the release tooling used in the build.
   _RELEASE_REPO_URL: https://github.com/cert-manager/release.git

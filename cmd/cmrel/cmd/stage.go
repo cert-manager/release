@@ -111,7 +111,7 @@ func (o *stageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Project, "project", release.DefaultReleaseProject, "The GCP project to run the GCB build jobs in.")
 	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Optional release version override used to force the version strings used during the release to a specific value. If not set, build is treated as development build and artifacts staged to 'devel' path.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository set when building the release.")
-	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", "", "Full name of the GCP KMS key to use for signing")
+	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing release artifacts.")
 
 	allOSList := release.AllOSes()

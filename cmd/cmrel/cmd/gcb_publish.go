@@ -180,7 +180,7 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
-	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", "", "Full name of the GCP KMS key to use for signing.")
+	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 }

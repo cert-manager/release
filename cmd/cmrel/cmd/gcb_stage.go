@@ -94,7 +94,7 @@ func (o *gcbStageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) 
 	fs.StringVar(&o.RepoPath, "repo-path", "", "Path to the cert-manager repository stored in disk to be built and published. This must already be checked out at the appropriate revision.")
 	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Optional release version override used to force the version strings used during the release to a specific value.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository set when building the release.")
-	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", "", "Full name of the GCP KMS key to use for signing")
+	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing")
 	fs.BoolVar(&o.SkipPush, "skip-push", false, "Skip pushing the staged release to a GCS bucket.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing release artifacts.")
 
