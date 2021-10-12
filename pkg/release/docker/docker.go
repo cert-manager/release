@@ -19,7 +19,7 @@ package docker
 import (
 	"context"
 
-	"github.com/cert-manager/release/pkg/release/shell"
+	"github.com/cert-manager/release/pkg/shell"
 )
 
 // Load runs 'docker load' against the named .tar file

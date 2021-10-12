@@ -29,6 +29,7 @@ steps:
     set -e
     git clone "${_RELEASE_REPO_URL}" . && git checkout "${_RELEASE_REPO_REF}"
     CGO_ENABLED=0 go build -o /workspace/go/bin/cmrel ./cmd/cmrel
+    go install github.com/sigstore/cosign/cmd/cosign@v1.2.1
 
 ## Write DOCKER_CONFIG file to $HOME/.docker/config.json
 - name: gcr.io/cloud-builders/docker:19.03.8
