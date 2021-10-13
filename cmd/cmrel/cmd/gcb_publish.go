@@ -483,7 +483,7 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 		return fmt.Errorf("must set signing-kms-key or skip-signing in order to sign images")
 	}
 
-	var pushedImages []string
+	var pushedContent []string
 
 	for name, tars := range rel.ComponentImageBundles {
 		log.Printf("Pushing release images for component %q", name)
@@ -492,7 +492,7 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 				return err
 			}
 			log.Printf("Pushed release image %q", t.ImageName())
-			pushedImages = append(pushedImages, t.ImageName())
+			pushedContent = append(pushedContent, t.ImageName())
 			// Wait 2 seconds to avoid being rate limited by the registry.
 			time.Sleep(time.Second * 2)
 		}
@@ -519,19 +519,20 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 			return err
 		}
 
+		pushedContent = append(pushedContent, manifestListName)
 		log.Printf("Pushed multi-arch manifest list %q", manifestListName)
 	}
 
-	if err := signContainerImages(ctx, o, pushedImages); err != nil {
+	if err := signRegistryContent(ctx, o, pushedContent); err != nil {
 		return fmt.Errorf("failed to sign images: %w", err)
 	}
 
 	return nil
 }
 
-func signContainerImages(ctx context.Context, o *gcbPublishOptions, imagesToSign []string) error {
+func signRegistryContent(ctx context.Context, o *gcbPublishOptions, contentToSign []string) error {
 	if o.SkipSigning {
-		log.Println("Skipping signing container images as skip-signing is set")
+		log.Println("Skipping signing container images / manifest lists as skip-signing is set")
 		return nil
 	}
 
@@ -542,11 +543,11 @@ func signContainerImages(ctx context.Context, o *gcbPublishOptions, imagesToSign
 		return err
 	}
 
-	if err := cosign.Sign(ctx, o.CosignPath, imagesToSign, parsedKey); err != nil {
-		return fmt.Errorf("failed to sign all container images: %w", err)
+	if err := cosign.Sign(ctx, o.CosignPath, contentToSign, parsedKey); err != nil {
+		return fmt.Errorf("failed to sign all container images / manifest lists: %w", err)
 	}
 
-	log.Printf("Signed container images: %s", strings.Join(imagesToSign, ", "))
+	log.Printf("Signed container images / manifest lists: %s", strings.Join(contentToSign, ", "))
 
 	return nil
 }
