@@ -22,7 +22,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/google/go-github/v35/github"
@@ -224,7 +223,10 @@ func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, branc
 	provPath := chart.ProvPath()
 
 	if provPath != nil {
-		provFileName := filepath.Base(*provPath)
+		// provPath is the path to the prov file in the cert-manager-manifests bundle,
+		// and so we use provPath for reading the content of the file, but we want
+		// to use `chartFileName + ".prov"` for the committed file's name
+		provFileName := chartFileName + ".prov"
 		provContent, err := os.ReadFile(*provPath)
 		if err != nil {
 			return errors.WithStack(err)
