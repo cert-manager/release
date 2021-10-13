@@ -24,12 +24,12 @@ import (
 )
 
 // Sign calls out to cosign to sign a given container using the provided GCP key.
-func Sign(ctx context.Context, containers []string, key sign.GCPKMSKey) error {
+func Sign(ctx context.Context, cosignPath string, containers []string, key sign.GCPKMSKey) error {
 	args := append([]string{
 		"sign",
 		"-key",
 		key.CosignFormat(),
 	}, containers...)
 
-	return shell.Command(ctx, "", "cosign", args...)
+	return shell.Command(ctx, "", cosignPath, args...)
 }

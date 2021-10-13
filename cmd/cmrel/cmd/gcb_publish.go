@@ -108,6 +108,9 @@ type gcbPublishOptions struct {
 	// PublishActions list of publishing actions to take
 	PublishActions []string
 
+	// CosignPath points to the location of the cosign binary
+	CosignPath string
+
 	// manualActionLogger logs to a buffer and is used by publish actions to log any manual
 	// actions that must be taken by the user even after a successful publish is completed.
 	// Get the log contents with ManualActionText()
@@ -181,6 +184,7 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
+	fs.StringVar(&o.CosignPath, "cosign-path", "cosign", "Full path to the cosign binary. Defaults to searching in $PATH for a binary called 'cosign'")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
@@ -197,6 +201,7 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
+	log.Printf("  CosignPath: %q", o.CosignPath)
 	log.Printf("  SkipSigning: %v", o.SkipSigning)
 	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
@@ -478,7 +483,7 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 		return fmt.Errorf("must set signing-kms-key or skip-signing in order to sign images")
 	}
 
-	var pushedImages []string
+	var pushedContent []string
 
 	for name, tars := range rel.ComponentImageBundles {
 		log.Printf("Pushing release images for component %q", name)
@@ -487,7 +492,7 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 				return err
 			}
 			log.Printf("Pushed release image %q", t.ImageName())
-			pushedImages = append(pushedImages, t.ImageName())
+			pushedContent = append(pushedContent, t.ImageName())
 			// Wait 2 seconds to avoid being rate limited by the registry.
 			time.Sleep(time.Second * 2)
 		}
@@ -514,19 +519,20 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 			return err
 		}
 
+		pushedContent = append(pushedContent, manifestListName)
 		log.Printf("Pushed multi-arch manifest list %q", manifestListName)
 	}
 
-	if err := signContainerImages(ctx, o, pushedImages); err != nil {
+	if err := signRegistryContent(ctx, o, pushedContent); err != nil {
 		return fmt.Errorf("failed to sign images: %w", err)
 	}
 
 	return nil
 }
 
-func signContainerImages(ctx context.Context, o *gcbPublishOptions, imagesToSign []string) error {
+func signRegistryContent(ctx context.Context, o *gcbPublishOptions, contentToSign []string) error {
 	if o.SkipSigning {
-		log.Println("Skipping signing container images as skip-signing is set")
+		log.Println("Skipping signing container images / manifest lists as skip-signing is set")
 		return nil
 	}
 
@@ -537,11 +543,11 @@ func signContainerImages(ctx context.Context, o *gcbPublishOptions, imagesToSign
 		return err
 	}
 
-	if err := cosign.Sign(ctx, imagesToSign, parsedKey); err != nil {
-		return fmt.Errorf("failed to sign all container images: %w", err)
+	if err := cosign.Sign(ctx, o.CosignPath, contentToSign, parsedKey); err != nil {
+		return fmt.Errorf("failed to sign all container images / manifest lists: %w", err)
 	}
 
-	log.Printf("Signed container images: %s", strings.Join(imagesToSign, ", "))
+	log.Printf("Signed container images / manifest lists: %s", strings.Join(contentToSign, ", "))
 
 	return nil
 }
