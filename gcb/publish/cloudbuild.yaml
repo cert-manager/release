@@ -19,7 +19,22 @@ secrets:
 
 steps:
 
-## Clone & checkout the cert-manager release repository
+## Clone & checkout the cosign repository, then build and install
+# You'd think we could just use "go install" but the gopath setup in this builder container
+# is roughly equivalent to a labyrinth. Nothing works as expected in this image; running it
+# locally won't help. The original cmrel build below works, so I'm just copying that to end
+# the nightmares and the pain.
+- name: gcr.io/cloud-builders/go:alpine-1.16
+  dir: "go/src/github.com/sigstore/cosign"
+  entrypoint: sh
+  args:
+  - -c
+  - |
+    set -e
+    git clone "${_COSIGN_REPO_URL}" . && git checkout "${_COSIGN_REPO_REF}"
+    CGO_ENABLED=0 go build -o /workspace/go/bin/cosign ./cmd/cosign
+
+## Clone & checkout the cert-manager release repository, then build and install
 - name: gcr.io/cloud-builders/go:alpine-1.16
   dir: "go/src/github.com/cert-manager/release"
   entrypoint: sh
@@ -29,7 +44,6 @@ steps:
     set -e
     git clone "${_RELEASE_REPO_URL}" . && git checkout "${_RELEASE_REPO_REF}"
     CGO_ENABLED=0 go build -o /workspace/go/bin/cmrel ./cmd/cmrel
-    go install github.com/sigstore/cosign/cmd/cosign@v1.2.1
 
 ## Write DOCKER_CONFIG file to $HOME/.docker/config.json
 - name: gcr.io/cloud-builders/docker:19.03.8
@@ -92,5 +106,7 @@ substitutions:
   _PUBLISH_ACTIONS: "*"
   ## Used as a tag to identify the build more easily later
   _TAG_RELEASE_NAME: ""
-  ## Path to cosign
-  _COSIGN_PATH: "/root/go/bin/cosign"
+  ## Cosign details
+  _COSIGN_REPO_URL: https://github.com/sigstore/cosign
+  _COSIGN_REPO_REF: "v1.2.1"
+  _COSIGN_PATH: "/workspace/go/bin/cosign"
