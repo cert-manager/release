@@ -29,7 +29,7 @@ steps:
     set -e
     git clone "${_RELEASE_REPO_URL}" . && git checkout "${_RELEASE_REPO_REF}"
     CGO_ENABLED=0 go build -o /workspace/go/bin/cmrel ./cmd/cmrel
-    go install github.com/sigstore/cosign/cmd/cosign@v1.2.1
+    GOBIN=/workspace/go/bin go install github.com/sigstore/cosign/cmd/cosign@v1.2.1
 
 ## Write DOCKER_CONFIG file to $HOME/.docker/config.json
 - name: gcr.io/cloud-builders/docker:19.03.8
@@ -63,6 +63,7 @@ steps:
   - --publish-actions=${_PUBLISH_ACTIONS}
   - --signing-kms-key=${_KMS_KEY}
   - --skip-signing=${_SKIP_SIGNING}
+  - --cosign-path=${_COSIGN_PATH}
 
 tags:
 - "cert-manager-release-publish"
@@ -91,3 +92,5 @@ substitutions:
   _PUBLISH_ACTIONS: "*"
   ## Used as a tag to identify the build more easily later
   _TAG_RELEASE_NAME: ""
+  ## Points to cosign
+  _COSIGN_PATH: "/workspace/go/bin/cosign"
