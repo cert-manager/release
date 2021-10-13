@@ -55,19 +55,29 @@ type signManifestsOptions struct {
 
 	// Path is the path to the cert-manager-manifests.tar.gz file
 	Path string
+
+	// ReleaseVersion is appended to the helm chart filename when it's written to disk,
+	// before it's signed. The filename is encoded into the signature and helm will
+	// check the filename matches, so the filename of the chart needs to match the name
+	// it'll appear with when published to a repo.
+	ReleaseVersion string
 }
 
 func (o *signManifestsOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Key, "key", "", "Full name of the GCP KMS key to use for signing")
 	fs.StringVar(&o.Path, "path", "", "Path to cert-manager-manifests.tar.gz")
+	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Release version to add to the chart path when signing. The filename must match the filename the chart will eventually be distributed with. E.g. for version 'v1.0.0', the chart will be signed as `cert-manager-v.1.0.0.tgz`.")
 	markRequired("key")
 	markRequired("path")
+	markRequired("release-version")
 }
 
 func (o *signManifestsOptions) print() {
 	log.Printf("sign manifests options:")
 	log.Printf("   Key: %q", o.Key)
 	log.Printf("  Path: %q", o.Path)
+
+	log.Printf("  ReleaseVersion: %q", o.ReleaseVersion)
 }
 
 func signManifestsCmd(rootOpts *rootOptions) *cobra.Command {
@@ -100,7 +110,7 @@ func runSignManifests(rootOpts *rootOptions, o *signManifestsOptions) error {
 		return err
 	}
 
-	err = sign.CertManagerManifests(ctx, parsedKey, o.Path)
+	err = sign.CertManagerManifests(ctx, parsedKey, o.Path, o.ReleaseVersion)
 	if err != nil {
 		return fmt.Errorf("failed to complete signing of %q: %w", o.Path, err)
 	}
