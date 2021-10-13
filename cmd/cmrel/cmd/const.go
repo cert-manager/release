@@ -18,4 +18,5 @@ package cmd
 
 // defaultKMSKey is the default signing key; this shouldn't change often so it should be safe enough
 // to hardcode it as a default for the quality-of-life improvement it brings to invoking various cmrel commands
-const defaultKMSKey = "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/versions/1"
+// WARNING: cosign requires a different format for the key; this is the format required by the GCP API but not cosign (which needs "versions" instead of "cryptoKeyVersions")
+const defaultKMSKey = "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"

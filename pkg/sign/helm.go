@@ -26,7 +26,7 @@ import (
 
 // HelmChart signs a given packaged helm chart (usually a .tgz file) using the given
 // KMS key, returning the human-readable signature bytes.
-func HelmChart(ctx context.Context, key string, chartPath string) ([]byte, error) {
+func HelmChart(ctx context.Context, key GCPKMSKey, chartPath string) ([]byte, error) {
 	signatory, err := signatoryFromKMS(ctx, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create KMS signer: %w", err)
@@ -51,7 +51,7 @@ func HelmChart(ctx context.Context, key string, chartPath string) ([]byte, error
 
 // signatoryFromKMS creates a Helm Signatory backed by a KMS key. The Signatory can then
 // be used to sign helm charts, but won't also be usable for validating signatures.
-func signatoryFromKMS(ctx context.Context, key string) (*helmsign.Signatory, error) {
+func signatoryFromKMS(ctx context.Context, key GCPKMSKey) (*helmsign.Signatory, error) {
 	entity, _, err := deriveEntity(ctx, key)
 	if err != nil {
 		return nil, err

@@ -37,7 +37,7 @@ steps:
   - --signing-kms-key=${_KMS_KEY}
   - --skip-signing=${_SKIP_SIGNING}
   - --target-os=${_TARGET_OSES}
-  - --target-arches=${_TARGET_ARCHES}
+  - --target-arch=${_TARGET_ARCHES}
 
 tags:
 - "cert-manager-release-stage"
@@ -55,7 +55,7 @@ substitutions:
   _RELEASE_VERSION: ""
   _RELEASE_BUCKET: ""
   _PUBLISHED_IMAGE_REPO: quay.io/jetstack
-  _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/versions/1"
+  _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"
   _SKIP_SIGNING: "false"
   # gcr.io/cloud-builders/bazel does not have tagged images only image digests,
   # so we have to manually find an image with the desired version.

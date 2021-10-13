@@ -74,7 +74,7 @@ substitutions:
   ## Required parameters
   _RELEASE_NAME: ""
   ## Optional/defaulted parameters
-  _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/versions/1"
+  _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"
   _SKIP_SIGNING: "false"
   _RELEASE_BUCKET: ""
   ## Options controlling the version of the release tooling used in the build.

@@ -29,6 +29,7 @@ import (
 
 	"github.com/cert-manager/release/pkg/gcb"
 	"github.com/cert-manager/release/pkg/release"
+	"github.com/cert-manager/release/pkg/sign"
 )
 
 const (
@@ -165,6 +166,12 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	gcs, err := storage.NewClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create GCS client: %w", err)
+	}
+
+	if o.SigningKMSKey != "" {
+		if _, err := sign.NewGCPKMSKey(o.SigningKMSKey); err != nil {
+			return err
+		}
 	}
 
 	bucket := release.NewBucket(gcs.Bucket(o.Bucket), release.DefaultBucketPathPrefix, release.BuildTypeRelease)

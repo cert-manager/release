@@ -28,6 +28,7 @@ import (
 
 	"github.com/cert-manager/release/pkg/gcb"
 	"github.com/cert-manager/release/pkg/release"
+	"github.com/cert-manager/release/pkg/sign"
 )
 
 const (
@@ -91,6 +92,7 @@ type stageOptions struct {
 
 	// SigningKMSKey is the full name of the GCP KMS key to be used for signing, e.g.
 	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/cryptoKeyVersions/<KEY_VERSION>
+	// This must be set if SkipSigning is not set to true
 	SigningKMSKey string
 
 	// TargetOSes is a comma-separated list of OSes which should be built for in this invocation
@@ -171,6 +173,13 @@ func runStage(rootOpts *rootOptions, o *stageOptions) error {
 		}
 		o.GitRef = ref
 	}
+
+	if o.SigningKMSKey != "" {
+		if _, err := sign.NewGCPKMSKey(o.SigningKMSKey); err != nil {
+			return err
+		}
+	}
+
 	log.Printf("Staging build for %s/%s@%s", o.Org, o.Repo, o.GitRef)
 
 	log.Printf("DEBUG: Loading cloudbuild.yaml file from %q", o.CloudBuildFile)
