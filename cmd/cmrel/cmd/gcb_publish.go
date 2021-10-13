@@ -286,6 +286,11 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 		if _, err := sign.NewGCPKMSKey(o.SigningKMSKey); err != nil {
 			return err
 		}
+
+		log.Printf("getting cosign version information")
+		if err := cosign.Version(ctx, o.CosignPath); err != nil {
+			return fmt.Errorf("failed to query cosign version: %w", err)
+		}
 	}
 
 	// fetch the staged release from GCS
