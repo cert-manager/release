@@ -33,3 +33,8 @@ func Sign(ctx context.Context, cosignPath string, containers []string, key sign.
 
 	return shell.Command(ctx, "", cosignPath, args...)
 }
+
+// Version calls "cosign version", both for informational purposes and as a check that the binary exists
+func Version(ctx context.Context, cosignPath string) error {
+	return shell.Command(ctx, "", cosignPath, []string{"version"}...)
+}
