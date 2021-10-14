@@ -238,7 +238,7 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 			return err
 		}
 
-		return sign.CertManagerManifests(ctx, parsedKey, path)
+		return sign.CertManagerManifests(ctx, parsedKey, path, o.ReleaseVersion)
 	}
 
 	// add 'manifests' (helm chart, k8s YAML manifests)

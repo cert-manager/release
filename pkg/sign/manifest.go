@@ -37,7 +37,7 @@ const manifestLocation = "deploy/chart/cert-manager.tgz"
 // the helm chart located at "deploy/chart/cert-manager.tgz" is signed, and a
 // signature "deploy/chart/cert-manager.tgz.prov" will be added.
 // The cert-manifests.tar.gz file is changed in-place.
-func CertManagerManifests(ctx context.Context, key GCPKMSKey, path string) error {
+func CertManagerManifests(ctx context.Context, key GCPKMSKey, path string, releaseVersion string) error {
 	// 1. Create temp dir for chart archive to be extracted to
 	// (Helm signing requires a filename, not a reader, so we have to write to disk here)
 	tmpDest, err := os.MkdirTemp("", "cmrel-extracted-manifests-")
@@ -57,14 +57,18 @@ func CertManagerManifests(ctx context.Context, key GCPKMSKey, path string) error
 	if err != nil {
 		return err
 	}
-
 	chartFileData, err := tarball.ReadSingleFile(manifestLocation, bytes.NewReader(tarData))
 	if err != nil {
 		return fmt.Errorf("failed to read %q from %q: %w", manifestLocation, path, err)
 	}
 
+	// The name of the helm chart on-disk is set to include the given releaseVersion, because the name of the chart
+	// is encoded into the signature we generate and needs to match. In other words, the chart's name when signed must be the same name it appears as
+	// when ultimately published to the helm repo.
+	versionedChartFileName := fmt.Sprintf("cert-manager-%s.tgz", releaseVersion)
+
 	// Write file to temp location (for helm's sake)
-	chartPath := filepath.Join(tmpDest, "cert-manager.tgz")
+	chartPath := filepath.Join(tmpDest, versionedChartFileName)
 	err = os.WriteFile(chartPath, chartFileData, 0o644)
 	if err != nil {
 		return err
