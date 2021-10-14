@@ -51,7 +51,7 @@ func ValidateUnpackedRelease(opts Options, rel *release.Unpacked) ([]string, err
 		}
 	}
 	if len(rel.CtlBinaryBundles) == 0 {
-		violations = append(violations, fmt.Sprintf("No kubectl plugin binaries found in release - this is probably an error!"))
+		violations = append(violations, fmt.Sprintf("No ctl binaries found in release - this is probably an error!"))
 	}
 	return violations, nil
 }

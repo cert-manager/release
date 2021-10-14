@@ -98,7 +98,7 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("Extracted %d multi arch ctl bundles from kubectl-cert_manager archives", len(ctlBinaryBundles))
+	log.Printf("Extracted %d multi arch ctl bundles from cmctl and kubectl-cert_manager archives", len(ctlBinaryBundles))
 
 	return &Unpacked{
 		ReleaseName:           s.Name(),
@@ -124,29 +124,32 @@ func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][
 // from the various 'ctl' .tar.gz files and return a map of component name
 // to a slice of binaries.Tar for each image in the bundle.
 func unpackCtlFromRelease(ctx context.Context, s *Staged) ([]binaries.Tar, error) {
-	log.Printf("Unpacking 'kubectl-cert_manager' type artifacts")
-	ctlA := s.ArtifactsOfKind("kubectl-cert_manager")
+	log.Printf("Unpacking 'cmctl' and 'kubectl-cert_manager' type artifacts")
 
 	// binaryBundles is a map from component name to slices of binaries.File
 	var binaryTarBundles []binaries.Tar
-	for _, a := range ctlA {
-		dir, err := extractStagedArtifactToTempDir(ctx, &a)
-		if err != nil {
-			return nil, err
-		}
-		binaryArchives, err := recursiveFindWithExt(dir, ".gz")
-		if err != nil {
-			return nil, err
-		}
-		for _, archive := range binaryArchives {
-			binaryTar, err := binaries.NewFile(archive, a.Metadata.OS, a.Metadata.Architecture)
+	for _, name := range []string{"kubectl-cert_manager", "cmctl"} {
+		ctlA := s.ArtifactsOfKind(name)
+		for _, a := range ctlA {
+			dir, err := extractStagedArtifactToTempDir(ctx, &a)
 			if err != nil {
-				return nil, fmt.Errorf("failed to inspect tar at path %q: %w", archive, err)
+				return nil, err
 			}
-			log.Printf("Found kubectl-cert_manager binary tar for os=%s, arch=%s", binaryTar.OS(), binaryTar.Architecture())
-			binaryTarBundles = append(binaryTarBundles, *binaryTar)
+			binaryArchives, err := recursiveFindWithExt(dir, ".gz")
+			if err != nil {
+				return nil, err
+			}
+			for _, archive := range binaryArchives {
+				binaryTar, err := binaries.NewFile(name, archive, a.Metadata.OS, a.Metadata.Architecture)
+				if err != nil {
+					return nil, fmt.Errorf("failed to inspect tar at path %q: %w", archive, err)
+				}
+				log.Printf("Found %s CLI binary tar for os=%s, arch=%s", name, binaryTar.OS(), binaryTar.Architecture())
+				binaryTarBundles = append(binaryTarBundles, *binaryTar)
+			}
 		}
 	}
+
 	return binaryTarBundles, nil
 }
 
