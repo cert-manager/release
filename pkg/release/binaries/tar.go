@@ -31,6 +31,7 @@ type Tar struct {
 
 func NewFile(name, path, osStr, arch string) (*Tar, error) {
 	return &Tar{
+		name: name,
 		path: path,
 		os:   osStr,
 		arch: arch,
