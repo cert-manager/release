@@ -217,11 +217,13 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 			}
 
 			if release.IsClientOS(osVariant) {
-				// add an artifact for the os and arch specific 'ctl' release tarball
-				clientArtifactName := fmt.Sprintf("cert-manager-kubectl-cert_manager-%s-%s.tar.gz", osVariant, arch)
-				// Add the arch-specific .tar.gz file to the list of artifacts
-				if err := appendArtifact(&artifacts, o.RepoPath, clientArtifactName, osVariant, arch); err != nil {
-					return err
+				// add an artifact for the os and arch specific 'cmctl' and 'kubectl-cert_manager' release tarball
+				for _, kind := range []string{"kubectl-cert_manager", "cmctl"} {
+					clientArtifactName := fmt.Sprintf("cert-manager-%s-%s-%s.tar.gz", kind, osVariant, arch)
+					// Add the arch-specific .tar.gz file to the list of artifacts
+					if err := appendArtifact(&artifacts, o.RepoPath, clientArtifactName, osVariant, arch); err != nil {
+						return err
+					}
 				}
 			}
 		}

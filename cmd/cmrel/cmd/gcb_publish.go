@@ -426,7 +426,7 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 			return fmt.Errorf("failed to open manifest file to be uploaded: %v", err)
 		}
 		defer f.Close()
-		ctlBinariesByName[fmt.Sprintf("kubectl-cert_manager-%s-%s.tar.gz", binaryTar.OS(), binaryTar.Architecture())] = f
+		ctlBinariesByName[fmt.Sprintf("%s-%s-%s.tar.gz", binaryTar.Name(), binaryTar.OS(), binaryTar.Architecture())] = f
 	}
 
 	log.Printf("Creating a draft GitHub release %q in repository %s/%s", rel.ReleaseVersion, o.PublishedGitHubOrg, o.PublishedGitHubRepo)

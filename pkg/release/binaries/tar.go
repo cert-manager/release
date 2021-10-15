@@ -24,9 +24,12 @@ type Tar struct {
 	// os and arch of the binary. This must be provided at instantiation time
 	// and cannot be determined by inspecting the tar file.
 	os, arch string
+
+	// name is the base name of the binary, (e.g. `cmctl`).
+	name string
 }
 
-func NewFile(path, osStr, arch string) (*Tar, error) {
+func NewFile(name, path, osStr, arch string) (*Tar, error) {
 	return &Tar{
 		path: path,
 		os:   osStr,
@@ -44,4 +47,8 @@ func (i *Tar) OS() string {
 
 func (i *Tar) Architecture() string {
 	return i.arch
+}
+
+func (i *Tar) Name() string {
+	return i.name
 }
