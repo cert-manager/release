@@ -18,19 +18,20 @@ package binaries
 
 // Tar is used for accessing and interacting with a tar wth a binary file stored on disk.
 type Tar struct {
+	// name is the base name of the binary, (e.g. `cmctl`).
+	name string
+
 	// path is the path to the tar file containing the binary on disk.
 	path string
 
 	// os and arch of the binary. This must be provided at instantiation time
 	// and cannot be determined by inspecting the tar file.
 	os, arch string
-
-	// name is the base name of the binary, (e.g. `cmctl`).
-	name string
 }
 
 func NewFile(name, path, osStr, arch string) (*Tar, error) {
 	return &Tar{
+		name: name,
 		path: path,
 		os:   osStr,
 		arch: arch,
