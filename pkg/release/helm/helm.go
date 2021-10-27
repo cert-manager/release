@@ -18,6 +18,7 @@ package helm
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -154,13 +155,14 @@ func (o *gitHubRepositoryManager) Publish(ctx context.Context, releaseName strin
 
 	// Create a new branch
 	newBranchName := releaseName
-	if err := o.createBranch(ctx, o.branch, newBranchName); err != nil {
+	ref, err := o.createBranch(ctx, o.branch, newBranchName)
+	if err != nil {
 		return "", err
 	}
 
 	// Upload charts
 	for _, chart := range charts {
-		if err := o.commitChartToBranch(ctx, newBranchName, chart); err != nil {
+		if err := o.commitChartToBranch(ctx, ref, chart); err != nil {
 			return "", err
 		}
 	}
@@ -182,21 +184,25 @@ func (o *gitHubRepositoryManager) Publish(ctx context.Context, releaseName strin
 
 // createBranch creates a new branch on the target repo
 // See https://stackoverflow.com/questions/9506181/github-api-create-branch
-func (o *gitHubRepositoryManager) createBranch(ctx context.Context, sourceName, branchName string) error {
-	source, _, err := o.GitClient.GetRef(ctx, o.owner, o.repo, fmt.Sprintf("refs/heads/%s", sourceName))
+func (o *gitHubRepositoryManager) createBranch(ctx context.Context, sourceName, branchName string) (*github.Reference, error) {
+	baseRef, _, err := o.GitClient.GetRef(ctx, o.owner, o.repo, fmt.Sprintf("refs/heads/%s", sourceName))
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
-	ref := &github.Reference{
+
+	newRef := &github.Reference{
 		Ref:    pointer.StringPtr(fmt.Sprintf("refs/heads/%s", branchName)),
-		Object: source.GetObject(),
+		Object: baseRef.GetObject(),
 	}
-	_, _, err = o.GitClient.CreateRef(ctx, o.owner, o.repo, ref)
-	return errors.WithStack(err)
+
+	ref, _, err := o.GitClient.CreateRef(ctx, o.owner, o.repo, newRef)
+	return ref, errors.WithStack(err)
 }
 
 // commitChartToBranch uploads a single Helm chart to the target branch, along with its signature if such a signature exists
-func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, branch string, chart manifests.Chart) error {
+func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, ref *github.Reference, chart manifests.Chart) error {
+	entries := []*github.TreeEntry{}
+
 	chartFileName := chart.PackageFileName()
 
 	chartContent, err := os.ReadFile(chart.Path())
@@ -204,21 +210,26 @@ func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, branc
 		return errors.WithStack(err)
 	}
 
-	_, _, err = o.RepositoriesClient.CreateFile(
-		ctx,
-		o.owner,
-		o.repo,
-		"charts/"+chartFileName,
-		&github.RepositoryContentFileOptions{
-			Content: chartContent,
-			Message: pointer.StringPtr(fmt.Sprintf(tplCommitMessage, chartFileName)),
-			Branch:  pointer.StringPtr(branch),
-		},
-	)
-
+	// we can't just append a github.TreeEntry because the tgz file is binary data and can't be string encoded, which
+	// is required for the "TreeEntry.Content" field. Instead, we have to create a blob manually and use "TreeEntry.SHA"
+	// to refer to that blob
+	chartBlob, _, err := o.GitClient.CreateBlob(ctx, o.owner, o.repo, &github.Blob{
+		Content:  github.String(base64.StdEncoding.EncodeToString(chartContent)),
+		Encoding: github.String("base64"),
+	})
 	if err != nil {
 		return errors.WithStack(err)
 	}
+
+	entries = append(entries, &github.TreeEntry{
+		Path: github.String("charts/" + chartFileName),
+		Type: github.String("blob"),
+		SHA:  chartBlob.SHA,
+		// 100644 = blob, see https://docs.github.com/en/rest/reference/git#create-a-tree--parameters
+		Mode: github.String("100644"),
+	})
+
+	commitMessage := fmt.Sprintf(tplCommitMessage, chartFileName)
 
 	provPath := chart.ProvPath()
 
@@ -232,21 +243,53 @@ func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, branc
 			return errors.WithStack(err)
 		}
 
-		_, _, err = o.RepositoriesClient.CreateFile(
-			ctx,
-			o.owner,
-			o.repo,
-			"charts/"+provFileName,
-			&github.RepositoryContentFileOptions{
-				Content: provContent,
-				Message: pointer.StringPtr(fmt.Sprintf(tplCommitMessage, provFileName)),
-				Branch:  pointer.StringPtr(branch),
-			},
-		)
+		// TreeEntries can create a blob entry if it contains textual data; a prov file does, so
+		// it's simpler to add than the tarred + gzipped chart
+		entries = append(entries, &github.TreeEntry{
+			Path:    github.String("charts/" + provFileName),
+			Type:    github.String("blob"),
+			Content: github.String(string(provContent)),
+			// 100644 = blob, see https://docs.github.com/en/rest/reference/git#create-a-tree--parameters
+			Mode: github.String("100644"),
+		})
 
 		if err != nil {
 			return errors.WithStack(err)
 		}
+
+		commitMessage = commitMessage + fmt.Sprintf(" and %s", provFileName)
+	}
+
+	tree, _, err := o.GitClient.CreateTree(ctx, o.owner, o.repo, *ref.Object.SHA, entries)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	parent, _, err := o.RepositoriesClient.GetCommit(ctx, o.owner, o.repo, *ref.Object.SHA)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	// This needs to be set, according to:
+	// https://github.com/google/go-github/blob/d1fa419b36aa9b7c70bc3464609991555667f681/example/commitpr/main.go#L132
+	parent.Commit.SHA = parent.SHA
+
+	commit := &github.Commit{
+		// nil author fills in with authenticated user details + current date
+		Author:  nil,
+		Message: &commitMessage,
+		Tree:    tree,
+		Parents: []*github.Commit{parent.Commit},
+	}
+	newCommit, _, err := o.GitClient.CreateCommit(ctx, o.owner, o.repo, commit)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
+	ref.Object.SHA = newCommit.SHA
+	_, _, err = o.GitClient.UpdateRef(ctx, o.owner, o.repo, ref, false)
+	if err != nil {
+		return errors.WithStack(err)
 	}
 
 	return nil
