@@ -104,7 +104,7 @@ type stageOptions struct {
 
 func (o *stageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Bucket, "bucket", release.DefaultBucketName, "The name of the GCS bucket to stage the release to.")
-	fs.StringVar(&o.Org, "org", "jetstack", "Name of the GitHub org to fetch cert-manager sources from.")
+	fs.StringVar(&o.Org, "org", "cert-manager", "Name of the GitHub org to fetch cert-manager sources from.")
 	fs.StringVar(&o.Repo, "repo", "cert-manager", "Name of the GitHub repo to fetch cert-manager sources from.")
 	fs.StringVar(&o.Branch, "branch", "master", "The git branch to build the release from. If --git-ref is not specified, the HEAD of this branch will be looked up on GitHub.")
 	fs.StringVar(&o.GitRef, "git-ref", "", "The git commit ref of cert-manager that should be staged.")

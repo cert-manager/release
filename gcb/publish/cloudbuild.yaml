@@ -58,7 +58,7 @@ steps:
 
 ## Build and push the release artifacts
 - name: gcr.io/cloud-builders/docker:19.03.8
-  dir: "go/src/github.com/jetstack/cert-manager"
+  dir: "go/src/github.com/cert-manager/cert-manager"
   entrypoint: /workspace/go/bin/cmrel
   secretEnv:
   - GITHUB_TOKEN

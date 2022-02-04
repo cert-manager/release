@@ -48,7 +48,7 @@ const (
 
 	// DefaultGitHubOrg is the default organisation containing the cert-manager
 	// repository.
-	DefaultGitHubOrg = "jetstack"
+	DefaultGitHubOrg = "cert-manager"
 
 	// DefaultGitHubRepo is the default repository containing the cert-manager
 	// code.

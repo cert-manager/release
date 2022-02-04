@@ -59,7 +59,7 @@ Flags:
       --cloudbuild string             The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild. The default value assumes that this tool is run from the root of the release repository. (default "./gcb/stage/cloudbuild.yaml")
       --git-ref string                The git commit ref of cert-manager that should be staged.
   -h, --help                          help for stage
-      --org string                    Name of the GitHub org to fetch cert-manager sources from. (default "jetstack")
+      --org string                    Name of the GitHub org to fetch cert-manager sources from. (default "cert-manager")
       --project string                The GCP project to run the GCB build jobs in. (default "cert-manager-release")
       --published-image-repo string   The docker image repository set when building the release. (default "quay.io/jetstack")
       --release-version string        Optional release version override used to force the version strings used during the release to a specific value.
