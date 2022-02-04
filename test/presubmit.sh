@@ -33,10 +33,10 @@ if [ ! -z $SIGNING_KEY ]; then
 fi
 
 # clone cert-manager @ master
-echo "+++ Cloning jetstack/cert-manager repository"
+echo "+++ Cloning cert-manager/cert-manager repository"
 tmpdir="$(mktemp -d)"
 trap "rm -rf ${tmpdir}" EXIT
-git clone https://github.com/jetstack/cert-manager.git "${tmpdir}"
+git clone https://github.com/cert-manager/cert-manager.git "${tmpdir}"
 
 echo "+++ Running 'gcb stage' command"
 $CMREL gcb stage \

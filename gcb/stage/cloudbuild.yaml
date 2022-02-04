@@ -4,7 +4,7 @@ steps:
 
 ## Clone & checkout the cert-manager repository
 - name: gcr.io/cloud-builders/git
-  dir: "go/src/github.com/jetstack/cert-manager"
+  dir: "go/src/github.com/cert-manager/cert-manager"
   entrypoint: bash
   args:
   - -c
@@ -25,7 +25,7 @@ steps:
 
 ## Build and push the release artifacts
 - name: 'gcr.io/cloud-builders/bazel@${_BAZEL_IMAGE_SHA}'
-  dir: "go/src/github.com/jetstack/cert-manager"
+  dir: "go/src/github.com/cert-manager/cert-manager"
   entrypoint: /workspace/go/bin/cmrel
   args:
   - gcb
@@ -51,7 +51,7 @@ substitutions:
   ## Required parameters
   _CM_REF: ""
   ## Optional/defaulted parameters
-  _CM_REPO: https://github.com/jetstack/cert-manager.git
+  _CM_REPO: https://github.com/cert-manager/cert-manager.git
   _RELEASE_VERSION: ""
   _RELEASE_BUCKET: ""
   _PUBLISHED_IMAGE_REPO: quay.io/jetstack
