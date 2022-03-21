@@ -77,6 +77,7 @@ func Execute() {
 	cmd := rootCmd(o)
 	cmd.AddCommand(stagedCmd(o))
 	cmd.AddCommand(stageCmd(o))
+	cmd.AddCommand(makeStageCmd(o))
 	cmd.AddCommand(gcbCmd(o))
 	cmd.AddCommand(publishCmd(o))
 	cmd.AddCommand(bootstrapPGPCmd(o))

@@ -6,6 +6,48 @@ NB: The most up-to-date release process is documented on the [cert-manager websi
 If you're trying to do a cert-manager release, you should start on the website. The docs
 here are mostly intended for people developing cert-manager tooling.
 
+## cmrel
+
+`cmrel` is a small tool to help with building and releasing cert-manager.
+
+The key commands are:
+
+- `cmrel makestage` - Build and stage a cert-manager release from a given git ref
+- `cmrel publish` - Publish a previously staged release
+
+## makestage
+
+`cmrel makestage` is a totally minimal wrapper for building a full cert-manager release.
+
+The actual commands which are run are defined entirely in a Makefile in the cert-manager repo. This command is essentially
+just glue to call that Makefile in Google Cloud Build, and then to copy the resulting files to GCS.
+
+The only argument which would normally be required is `--git-ref` which specifies the git ref to check out for the cert-manager
+repo. This might be a commit, a tag, or a branch. Usually for a release, a tag would be specified.
+
+An example invocation might be:
+
+```console
+$ cmrel makestage --ref master
+... lots of output ...
+```
+
+## publish
+
+`cmrel publish` takes a staged release from Google Cloud Storage, validates it, and then
+pushes it out to public facing locations including Helm repos, container registries, and GitHub
+releases.
+
+```console
+$ cmrel publish \
+    --release-name v0.14.0-f6da9c76877551ef32503b17189bb178501f59a7 \
+    --nomock
+```
+
+# Legacy Docs
+
+All below docs are legacy and are preserved only for the transition from bazel to make.
+
 ## Control Flow During a Release
 
 `cmrel` is used in various places - including by itself - to carry out a release.
