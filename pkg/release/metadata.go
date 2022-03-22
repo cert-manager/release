@@ -29,6 +29,11 @@ type Metadata struct {
 
 	// GCS URIs of the artifacts that are a part of this build.
 	Artifacts []ArtifactMetadata `json:"artifacts"`
+
+	// BuildSource denotes what built the staged files, making it easier to identify
+	// how they were produced. This is used as part of the migration from Bazel to
+	// Make. An empty BuildSource is assumed to mean Bazel produced the files.
+	BuildSource string `json:"buildSource,omitempty"`
 }
 
 type ArtifactMetadata struct {

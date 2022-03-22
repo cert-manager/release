@@ -300,6 +300,7 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	}
 
 	bucket := release.NewBucket(gcs.Bucket(o.Bucket), release.DefaultBucketPathPrefix, release.BuildTypeRelease)
+
 	staged, err := bucket.GetRelease(ctx, o.ReleaseName)
 	if err != nil {
 		return fmt.Errorf("failed to fetch release: %w", err)
@@ -420,13 +421,15 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 
 	// open ctl binary tar files ahead of time to ensure they are available on disk
 	ctlBinariesByName := map[string]*os.File{}
-	for _, binaryTar := range rel.CtlBinaryBundles {
-		f, err := os.Open(binaryTar.Filepath())
+	for _, ctlBinary := range rel.CtlBinaryBundles {
+		f, err := os.Open(ctlBinary.Filepath())
 		if err != nil {
 			return fmt.Errorf("failed to open manifest file to be uploaded: %v", err)
 		}
+
 		defer f.Close()
-		ctlBinariesByName[fmt.Sprintf("%s-%s-%s.tar.gz", binaryTar.Name(), binaryTar.OS(), binaryTar.Architecture())] = f
+
+		ctlBinariesByName[ctlBinary.ArtifactFilename()] = f
 	}
 
 	log.Printf("Creating a draft GitHub release %q in repository %s/%s", rel.ReleaseVersion, o.PublishedGitHubOrg, o.PublishedGitHubRepo)

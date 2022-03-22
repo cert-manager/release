@@ -31,6 +31,7 @@ import (
 	"github.com/cert-manager/release/pkg/release/images"
 	"github.com/cert-manager/release/pkg/release/manifests"
 	"github.com/cert-manager/release/pkg/release/tar"
+	"github.com/cert-manager/release/pkg/release/zip"
 )
 
 // Unpacked wraps a staged release that has been fetched and unpacked locally.
@@ -42,7 +43,7 @@ type Unpacked struct {
 	GitCommitRef          string
 	Charts                []manifests.Chart
 	YAMLs                 []manifests.YAML
-	CtlBinaryBundles      []binaries.Tar
+	CtlBinaryBundles      []binaries.Archive
 	ComponentImageBundles map[string][]images.Tar
 }
 
@@ -120,14 +121,57 @@ func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][
 	return unpackImages(ctx, serverA, "")
 }
 
-// unpackCtlFromRelease will extract all ctl tar archives
-// from the various 'ctl' .tar.gz files and return a map of component name
-// to a slice of binaries.Tar for each image in the bundle.
-func unpackCtlFromRelease(ctx context.Context, s *Staged) ([]binaries.Tar, error) {
+// unpackCtlFromRelease extracts all ctl archives from the various 'ctl' .tar.gz / .zip files
+// a slice of binaries.Archive holding each ctl binary in the bundle.
+func unpackCtlFromRelease(ctx context.Context, s *Staged) ([]binaries.Archive, error) {
 	log.Printf("Unpacking 'cmctl' and 'kubectl-cert_manager' type artifacts")
 
-	// binaryBundles is a map from component name to slices of binaries.File
-	var binaryTarBundles []binaries.Tar
+	if s.Metadata().BuildSource == BuildSourceMake {
+		return unpackCtlFromMakeRelease(ctx, s)
+	} else {
+		return unpackCtlFromBazelRelease(ctx, s)
+	}
+}
+
+func unpackCtlFromMakeRelease(ctx context.Context, s *Staged) ([]binaries.Archive, error) {
+	// Example layouts of make ctl archives, containing just the binary + license file
+	// cert-manager-cmctl-linux-amd64.tar.gz
+	//   ├── cmctl
+	//   └── LICENSE
+	// cert-manager-cmctl-windows-amd64.zip
+	//   ├── cmctl
+	//   └── LICENSE
+	var binaryBundles []binaries.Archive
+
+	for _, name := range []string{"kubectl-cert_manager", "cmctl"} {
+		ctlA := s.ArtifactsOfKind(name)
+		for _, a := range ctlA {
+			f, err := downloadStagedArtifact(ctx, &a)
+			if err != nil {
+				return nil, fmt.Errorf("failed to download %q: %w", a.Metadata.Name, err)
+			}
+
+			binaryArchive := binaries.NewArchive(name, f.Name(), a.Metadata.OS, a.Metadata.Architecture, a.Metadata.Name)
+
+			log.Printf("Found %s CLI binary archive for os=%s, arch=%s", name, binaryArchive.OS(), binaryArchive.Architecture())
+
+			binaryBundles = append(binaryBundles, *binaryArchive)
+		}
+	}
+
+	return binaryBundles, nil
+}
+
+func unpackCtlFromBazelRelease(ctx context.Context, s *Staged) ([]binaries.Archive, error) {
+	// Example layout of a bazel ctl archive, containing another embedded archive
+	// cert-manager-cmctl-linux-amd64.tar.gz
+	//   ├── cmctl-linux-amd64.tar.gz
+	//   │   ├── cmctl
+	//   │   └── LICENSES
+	//   └── version
+
+	var binaryBundles []binaries.Archive
+
 	for _, name := range []string{"kubectl-cert_manager", "cmctl"} {
 		ctlA := s.ArtifactsOfKind(name)
 		for _, a := range ctlA {
@@ -135,22 +179,23 @@ func unpackCtlFromRelease(ctx context.Context, s *Staged) ([]binaries.Tar, error
 			if err != nil {
 				return nil, err
 			}
+
 			binaryArchives, err := recursiveFindWithExt(dir, ".gz")
 			if err != nil {
 				return nil, err
 			}
+
 			for _, archive := range binaryArchives {
-				binaryTar, err := binaries.NewFile(name, archive, a.Metadata.OS, a.Metadata.Architecture)
-				if err != nil {
-					return nil, fmt.Errorf("failed to inspect tar at path %q: %w", archive, err)
-				}
-				log.Printf("Found %s CLI binary tar for os=%s, arch=%s", name, binaryTar.OS(), binaryTar.Architecture())
-				binaryTarBundles = append(binaryTarBundles, *binaryTar)
+				binaryArchive := binaries.NewArchive(name, archive, a.Metadata.OS, a.Metadata.Architecture, a.Metadata.Name)
+
+				log.Printf("Found %s CLI binary archive for os=%s, arch=%s", name, binaryArchive.OS(), binaryArchive.Architecture())
+
+				binaryBundles = append(binaryBundles, *binaryArchive)
 			}
 		}
 	}
 
-	return binaryTarBundles, nil
+	return binaryBundles, nil
 }
 
 func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix string) (map[string][]images.Tar, error) {
@@ -213,6 +258,55 @@ func manifestArtifactForStaged(s *Staged) (*StagedArtifact, error) {
 	return &artifacts[0], nil
 }
 
+func downloadStagedArtifact(ctx context.Context, a *StagedArtifact) (*os.File, error) {
+	f, err := os.CreateTemp("", "temp-artifact-")
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	r, err := a.ObjectHandle.NewReader(ctx)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	defer r.Close()
+
+	if _, err := io.Copy(f, r); err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	// flush data to disk
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	// seek back to the start of the file so it can be read again
+	if _, err := f.Seek(0, 0); err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	// validate the sha256sum
+	downloadedSum, err := sha256SumFile(f.Name())
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+
+	if downloadedSum != a.Metadata.SHA256 {
+		f.Close()
+		return nil, fmt.Errorf("artifact %q has a mismatching checksum - refusing to extract", a.Metadata.Name)
+	}
+
+	log.Printf("Validated sha256sum of artifact %q: %s", a.Metadata.Name, downloadedSum)
+
+	return f, nil
+}
+
 func extractStagedArtifactToTempDir(ctx context.Context, a *StagedArtifact) (string, error) {
 	dest, err := os.MkdirTemp("", "extracted-artifact-")
 	if err != nil {
@@ -224,39 +318,16 @@ func extractStagedArtifactToTempDir(ctx context.Context, a *StagedArtifact) (str
 
 func extractStagedArtifact(ctx context.Context, a *StagedArtifact, dest string) error {
 	// download the file to disk first
-	f, err := os.CreateTemp("", "temp-artifact-")
+	f, err := downloadStagedArtifact(ctx, a)
 	if err != nil {
 		return err
 	}
+
 	defer f.Close()
 
-	r, err := a.ObjectHandle.NewReader(ctx)
-	if err != nil {
-		return err
+	if filepath.Ext(a.Metadata.Name) == ".zip" {
+		return zip.Unzip(dest, f)
 	}
-	defer r.Close()
-	if _, err := io.Copy(f, r); err != nil {
-		return err
-	}
-	// flush data to disk
-	if err := f.Sync(); err != nil {
-		return err
-	}
-	// seek back to the start of the file so it can be read again
-	if _, err := f.Seek(0, 0); err != nil {
-		return err
-	}
-
-	// validate the sha256sum
-	downloadedSum, err := sha256SumFile(f.Name())
-	if err != nil {
-		return err
-	}
-	if downloadedSum != a.Metadata.SHA256 {
-		return fmt.Errorf("artifact %q has a mismatching checksum - refusing to extract", a.Metadata.Name)
-	}
-
-	log.Printf("Validated sha256sum of artifact %q: %s", a.Metadata.Name, downloadedSum)
 
 	return tar.UntarGz(dest, f)
 }
