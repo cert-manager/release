@@ -528,13 +528,9 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 		log.Printf("Pushed multi-arch manifest list %q", manifestListName)
 	}
 
-	// TODO: since cert-manager images are currently pushed to quay.io, we can't actually sign
-	// the images since quay doesn't support cosign signatures. when it's upgraded to 3.6, we can
-	// uncomment this and sign.
-	// see: https://github.com/sigstore/cosign/issues/40#issuecomment-833217878
-	// if err := signRegistryContent(ctx, o, pushedContent); err != nil {
-	// 	return fmt.Errorf("failed to sign images: %w", err)
-	// }
+	if err := signRegistryContent(ctx, o, pushedContent); err != nil {
+		return fmt.Errorf("failed to sign images: %w", err)
+	}
 
 	return nil
 }
