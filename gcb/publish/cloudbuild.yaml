@@ -108,5 +108,5 @@ substitutions:
   _TAG_RELEASE_NAME: ""
   ## Cosign details
   _COSIGN_REPO_URL: https://github.com/sigstore/cosign
-  _COSIGN_REPO_REF: "v1.2.1"
+  _COSIGN_REPO_REF: "v1.5.2"
   _COSIGN_PATH: "/workspace/go/bin/cosign"
