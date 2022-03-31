@@ -27,6 +27,11 @@ func Load(ctx context.Context, path string) error {
 	return shell.Command(ctx, "", "docker", "load", "-i", path)
 }
 
+// Tag runs `docker tag` which tags the given image with a new tag
+func Tag(ctx context.Context, image string, newTag string) error {
+	return shell.Command(ctx, "", "docker", "tag", image, newTag)
+}
+
 // Push runs 'docker push' with the given image name
 func Push(ctx context.Context, image string) error {
 	return shell.Command(ctx, "", "docker", "push", image)

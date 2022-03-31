@@ -44,7 +44,7 @@ type Unpacked struct {
 	Charts                []manifests.Chart
 	YAMLs                 []manifests.YAML
 	CtlBinaryBundles      []binaries.Archive
-	ComponentImageBundles map[string][]images.Tar
+	ComponentImageBundles map[string][]*images.Tar
 }
 
 // Unpack takes a staged release, inspects its metadata, fetches referenced
@@ -115,7 +115,7 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 // unpackServerImagesFromRelease will extract all 'image-like' tar archives
 // from the various 'server' .tar.gz files and return a map of component name
 // to a slice of images.Tar for each image in the bundle.
-func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][]images.Tar, error) {
+func unpackServerImagesFromRelease(ctx context.Context, s *Staged) (map[string][]*images.Tar, error) {
 	log.Printf("Unpacking 'server' type artifacts")
 	serverA := s.ArtifactsOfKind("server")
 	return unpackImages(ctx, serverA, "")
@@ -198,18 +198,41 @@ func unpackCtlFromBazelRelease(ctx context.Context, s *Staged) ([]binaries.Archi
 	return binaryBundles, nil
 }
 
-func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix string) (map[string][]images.Tar, error) {
+func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix string) (map[string][]*images.Tar, error) {
 	// tarBundles is a map from component name to slices of images.Tar
-	tarBundles := make(map[string][]images.Tar)
+	tarBundles := make(map[string][]*images.Tar)
+
 	for _, a := range artifacts {
+		// each server bundle is a .tar.gz file which looks like this:
+		// cert-manager-server-<os>-<arch>
+		// ├── LICENSES
+		// ├── server
+		// │   └── images
+		// │       ├── acmesolver.docker_tag
+		// │       ├── acmesolver.tar
+		// │       ├── cainjector.docker_tag
+		// │       ├── cainjector.tar
+		// │       ├── controller.docker_tag
+		// │       ├── controller.tar
+		// │       ├── ctl.docker_tag
+		// │       ├── ctl.tar
+		// │       ├── webhook.docker_tag
+		// │       └── webhook.tar
+		// └── version
+
+		// Each .tar file is a separate container
+
 		dir, err := extractStagedArtifactToTempDir(ctx, &a)
 		if err != nil {
 			return nil, err
 		}
+
+		// imageArchives becomes a list of each container packaged in this artifact
 		imageArchives, err := recursiveFindWithExt(dir, ".tar")
 		if err != nil {
 			return nil, err
 		}
+
 		for _, archive := range imageArchives {
 			imageTar, err := images.NewTar(archive, a.Metadata.OS, a.Metadata.Architecture)
 			if err != nil {
@@ -218,10 +241,11 @@ func unpackImages(ctx context.Context, artifacts []StagedArtifact, trimSuffix st
 
 			baseName := filepath.Base(archive)
 			componentName := strings.TrimSuffix(baseName[:len(baseName)-len(filepath.Ext(baseName))], trimSuffix)
-			log.Printf("Found image for component %q with name %q", componentName, imageTar.ImageName())
-			tarBundles[componentName] = append(tarBundles[componentName], *imageTar)
+			log.Printf("Found image for component %q with name %q", componentName, imageTar.RawImageName())
+			tarBundles[componentName] = append(tarBundles[componentName], imageTar)
 		}
 	}
+
 	return tarBundles, nil
 }
 

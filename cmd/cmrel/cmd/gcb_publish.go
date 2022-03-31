@@ -496,11 +496,24 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 	for name, tars := range rel.ComponentImageBundles {
 		log.Printf("Pushing release images for component %q", name)
 		for _, t := range tars {
-			if err := docker.Push(ctx, t.ImageName()); err != nil {
+			imageTag := buildImageTag(o.PublishedImageRepository, name, t.Architecture(), rel.ReleaseVersion)
+
+			log.Printf("Tagging %q with new name %q", t.RawImageName(), imageTag)
+
+			if err := docker.Tag(ctx, t.RawImageName(), imageTag); err != nil {
 				return err
 			}
-			log.Printf("Pushed release image %q", t.ImageName())
-			pushedContent = append(pushedContent, t.ImageName())
+
+			if err := docker.Push(ctx, imageTag); err != nil {
+				return err
+			}
+
+			// PublishedTag will be used later to refer to the image under the tag we
+			// actually pushed it under
+			t.PublishedTag = imageTag
+
+			log.Printf("Pushed release image %q", imageTag)
+			pushedContent = append(pushedContent, imageTag)
 			// Wait 2 seconds to avoid being rate limited by the registry.
 			time.Sleep(time.Second * 2)
 		}
@@ -562,6 +575,10 @@ func signRegistryContent(ctx context.Context, o *gcbPublishOptions, contentToSig
 
 func buildManifestListName(repo, componentName, tag string) string {
 	return fmt.Sprintf("%s/cert-manager-%s:%s", repo, componentName, tag)
+}
+
+func buildImageTag(repo, componentName, arch, tag string) string {
+	return fmt.Sprintf("%s/cert-manager-%s-%s:%s", repo, componentName, arch, tag)
 }
 
 func errorDuringPublish(err error) error {
