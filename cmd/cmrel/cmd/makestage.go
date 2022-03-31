@@ -127,6 +127,8 @@ func makeStageCmd(rootOpts *rootOptions) *cobra.Command {
 }
 
 func runMakeStage(rootOpts *rootOptions, o *makeStageOptions) error {
+	ctx := context.Background()
+
 	if o.SigningKMSKey != "" {
 		if _, err := sign.NewGCPKMSKey(o.SigningKMSKey); err != nil {
 			return err
@@ -145,13 +147,21 @@ func runMakeStage(rootOpts *rootOptions, o *makeStageOptions) error {
 		build.Options = &cloudbuild.BuildOptions{MachineType: "n1-highcpu-32"}
 	}
 
+	gitRef, err := release.LookupRefSHA(o.Org, o.Repo, o.Ref)
+	if err != nil {
+		return fmt.Errorf("error looking up git commit ref: %w", err)
+	}
+
+	outputDir := release.BucketPathForRelease(release.DefaultBucketPathPrefix, release.BuildTypeRelease, o.Ref, gitRef)
+
+	outputGCSURL := fmt.Sprintf("gs://%s/%s", o.Bucket, outputDir)
+
 	build.Substitutions["_CM_REF"] = o.Ref
 	build.Substitutions["_CM_REPO"] = fmt.Sprintf("https://github.com/%s/%s.git", o.Org, o.Repo)
-	build.Substitutions["_RELEASE_BUCKET"] = o.Bucket
+	build.Substitutions["_OUTPUT_GCS_URL"] = outputGCSURL
 	build.Substitutions["_KMS_KEY"] = o.SigningKMSKey
 
 	log.Printf("DEBUG: building google cloud build API client")
-	ctx := context.Background()
 	svc, err := cloudbuild.NewService(ctx)
 	if err != nil {
 		return fmt.Errorf("error building google cloud build API client: %w", err)
@@ -177,10 +187,10 @@ func runMakeStage(rootOpts *rootOptions, o *makeStageOptions) error {
 
 	if build.Status != gcb.Success {
 		log.Printf("An error occurred building the release. Check the log files for more information: %s", build.LogUrl)
-		return fmt.Errorf("building release tarballs failed")
+		return fmt.Errorf("building release with ref %q failed", o.Ref)
 	}
 
-	log.Printf("Release build complete for ref %s", o.Ref)
+	log.Printf("Release build complete for %s/%s@%s - artifacts available at: %s", o.Org, o.Repo, o.Ref, outputGCSURL)
 
 	return nil
 }
