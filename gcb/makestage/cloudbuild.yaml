@@ -13,7 +13,7 @@ steps:
     git clone "${_CM_REPO}" . && git checkout "${_CM_REF}"
 
 ## Build release artifacts and push to a bucket
-- name: 'eu.gcr.io/jetstack-build-infra-images/bazelbuild:${_IMAGE_TAG}'
+- name: 'eu.gcr.io/jetstack-build-infra-images/bazelbuild:${_BUILDER_IMAGE_TAG}'
   dir: "go/src/github.com/cert-manager/cert-manager"
   entrypoint: bash
   args:
@@ -21,26 +21,23 @@ steps:
   - |
     set -eu -o pipefail
     apt-get install -y jq
-    export RELEASE_NAME="$(git describe --tags)-$(git rev-parse HEAD)"
-    export RELEASE_BUCKET_PATH="gs://${_RELEASE_BUCKET}/release/$$RELEASE_NAME"
     make vendor-go
     make CMREL_KEY="${_KMS_KEY}" -j16 release
-    gsutil -m cp ./bin/release/* $$RELEASE_BUCKET_PATH
-    echo "Wrote $$RELEASE_NAME to $$RELEASE_BUCKET_PATH"
+    gsutil -m cp ./bin/release/* ${_OUTPUT_GCS_URL}
+    echo "Wrote to ${_OUTPUT_GCS_URL}"
 
 tags:
 - "cert-manager-release-makestage"
 - "ref-${_CM_REF}"
 
 substitutions:
-  ## Required parameters
   _CM_REF: "master"
-  ## Optional/defaulted parameters
-  _CM_REPO: https://github.com/cert-manager/cert-manager.git
+  _CM_REPO: "https://github.com/cert-manager/cert-manager.git"
   _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"
+  _OUTPUT_GCS_URL: ""
   # gcr.io/cloud-builders/bazel does not have tagged images only image digests,
   # so we have to manually find an image with the desired version.
-  _IMAGE_TAG: "20210831-4cf7b0b-4.2.1"
+  _BUILDER_IMAGE_TAG: "20210831-4cf7b0b-4.2.1"
 
 options:
   machineType: n1-highcpu-32

@@ -46,3 +46,34 @@ func LookupBranchRef(org, repo, branch string) (string, error) {
 
 	return p.Object.SHA, nil
 }
+
+// LookupRefSHA will lookup the git commit SHA of the given ref in the given repository.
+// It does this by querying the GitHub v3 API at:
+// https://api.github.com/repos/{org}/{repo}/commits/{ref}
+// Works with branches (will fetch the SHA of HEAD) or tags
+func LookupRefSHA(org, repo, ref string) (string, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/commits/%s", org, repo, ref)
+
+	resp, err := http.DefaultClient.Get(url)
+	if err != nil {
+		return "", err
+	}
+
+	defer resp.Body.Close()
+
+	type payload struct {
+		SHA string `json:"sha"`
+	}
+
+	p := payload{}
+
+	if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+		return "", err
+	}
+
+	if p.SHA == "" {
+		return "", fmt.Errorf("couldn't find a valid SHA for %q in %s/%s", ref, org, repo)
+	}
+
+	return p.SHA, nil
+}
