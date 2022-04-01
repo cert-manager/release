@@ -43,8 +43,7 @@ type StagedArtifact struct {
 	ObjectHandle *storage.ObjectHandle
 }
 
-func NewStagedRelease(name, prefix string, objects ...*storage.ObjectHandle) (*Staged, error) {
-	ctx := context.TODO()
+func NewStagedRelease(ctx context.Context, name, prefix string, objects ...*storage.ObjectHandle) (*Staged, error) {
 	meta, err := loadReleaseMetadataFile(ctx, objects...)
 	if err != nil {
 		return nil, err
@@ -73,9 +72,8 @@ func (s Staged) Metadata() Metadata {
 	return s.meta
 }
 
-// ArtifactsOfKind returns a list of ObjectHandles of .tar.gz artifacts of type
-// kind. A kind may be 'server', 'manifests', 'test' etc. and refers to a
-// platform as defined in `build/release-tars/BUILD.bazel`.
+// ArtifactsOfKind returns a list of staged artifacts of the type denoted by
+// `kind`. A kind may be 'server', 'manifests', 'test' etc.
 func (s Staged) ArtifactsOfKind(kind string) []StagedArtifact {
 	var objs []StagedArtifact
 	for _, obj := range s.artifacts {
@@ -95,9 +93,11 @@ func loadReleaseMetadataFile(ctx context.Context, objs ...*storage.ObjectHandle)
 			break
 		}
 	}
+
 	if metadataObj == nil {
 		return nil, fmt.Errorf("release metadata not found")
 	}
+
 	r, err := metadataObj.NewReader(ctx)
 	if err != nil {
 		return nil, err

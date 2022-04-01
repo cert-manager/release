@@ -35,9 +35,16 @@ type Tar struct {
 	// and cannot be determined by inspecting the tar file.
 	os, arch string
 
-	// imageName is the name of the image stored in the tar file, extracted by
-	// reading the manifest.json file in the archive.
-	imageName string
+	// rawImageName is the name of the image stored in the tar file, extracted by
+	// reading the manifest.json file in the archive. Not necessarily the name
+	// which will be used to push the image; a constructed tag will be used
+	// for that, and the image will be retagged before pushing.
+	rawImageName string
+
+	// PublishedTag is the tag which the image has been published under, which might
+	// be different to the raw image name which was part of the release. This should
+	// be set after an image has been re-tagged and pushed.
+	PublishedTag string
 }
 
 func NewTar(path, osStr, arch string) (*Tar, error) {
@@ -74,12 +81,12 @@ func NewTar(path, osStr, arch string) (*Tar, error) {
 	if len(meta.RepoTags) > 1 {
 		return nil, fmt.Errorf("found multiple image tag entries in image tar metadata.json file")
 	}
-	imageName := meta.RepoTags[0]
+	rawImageName := meta.RepoTags[0]
 	return &Tar{
-		path:      path,
-		os:        osStr,
-		arch:      arch,
-		imageName: imageName,
+		path:         path,
+		os:           osStr,
+		arch:         arch,
+		rawImageName: rawImageName,
 	}, nil
 }
 
@@ -95,12 +102,12 @@ func (i *Tar) Architecture() string {
 	return i.arch
 }
 
-func (i *Tar) ImageName() string {
-	return i.imageName
+func (i *Tar) RawImageName() string {
+	return i.rawImageName
 }
 
 func (i *Tar) ImageTag() string {
-	s := strings.Split(i.imageName, ":")
+	s := strings.Split(i.rawImageName, ":")
 	if len(s) < 2 {
 		return "latest"
 	}

@@ -18,16 +18,21 @@ package registry
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/cert-manager/release/pkg/release/docker"
 	"github.com/cert-manager/release/pkg/release/images"
 )
 
-func CreateManifestList(ctx context.Context, name string, tars []images.Tar) error {
+func CreateManifestList(ctx context.Context, name string, tars []*images.Tar) error {
 	imageNames := make([]string, len(tars))
 	for i, t := range tars {
-		imageNames[i] = t.ImageName()
+		if t.PublishedTag == "" {
+			return fmt.Errorf("image %q has no PublishedTag", t.RawImageName())
+		}
+
+		imageNames[i] = t.PublishedTag
 	}
 
 	log.Printf("Creating manifest list %q", name)
@@ -38,8 +43,8 @@ func CreateManifestList(ctx context.Context, name string, tars []images.Tar) err
 
 	for _, t := range tars {
 		a := manifestListAnnotationsForOSArch(t.OS(), t.Architecture())
-		log.Printf("Annotating image %q with os=%q, arch=%q, variant=%q", t.ImageName(), a.os, a.arch, a.variant)
-		if err := docker.AnnotateManifestList(ctx, name, t.ImageName(), a.os, a.arch, a.variant); err != nil {
+		log.Printf("Annotating image %q with os=%q, arch=%q, variant=%q", t.PublishedTag, a.os, a.arch, a.variant)
+		if err := docker.AnnotateManifestList(ctx, name, t.PublishedTag, a.os, a.arch, a.variant); err != nil {
 			log.Printf("Failed to annotate manifest list with os/arch information.")
 			return err
 		}

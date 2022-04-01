@@ -300,6 +300,7 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	}
 
 	bucket := release.NewBucket(gcs.Bucket(o.Bucket), release.DefaultBucketPathPrefix, release.BuildTypeRelease)
+
 	staged, err := bucket.GetRelease(ctx, o.ReleaseName)
 	if err != nil {
 		return fmt.Errorf("failed to fetch release: %w", err)
@@ -420,13 +421,15 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 
 	// open ctl binary tar files ahead of time to ensure they are available on disk
 	ctlBinariesByName := map[string]*os.File{}
-	for _, binaryTar := range rel.CtlBinaryBundles {
-		f, err := os.Open(binaryTar.Filepath())
+	for _, ctlBinary := range rel.CtlBinaryBundles {
+		f, err := os.Open(ctlBinary.Filepath())
 		if err != nil {
 			return fmt.Errorf("failed to open manifest file to be uploaded: %v", err)
 		}
+
 		defer f.Close()
-		ctlBinariesByName[fmt.Sprintf("%s-%s-%s.tar.gz", binaryTar.Name(), binaryTar.OS(), binaryTar.Architecture())] = f
+
+		ctlBinariesByName[ctlBinary.ArtifactFilename()] = f
 	}
 
 	log.Printf("Creating a draft GitHub release %q in repository %s/%s", rel.ReleaseVersion, o.PublishedGitHubOrg, o.PublishedGitHubRepo)
@@ -493,11 +496,24 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 	for name, tars := range rel.ComponentImageBundles {
 		log.Printf("Pushing release images for component %q", name)
 		for _, t := range tars {
-			if err := docker.Push(ctx, t.ImageName()); err != nil {
+			imageTag := buildImageTag(o.PublishedImageRepository, name, t.Architecture(), rel.ReleaseVersion)
+
+			log.Printf("Tagging %q with new name %q", t.RawImageName(), imageTag)
+
+			if err := docker.Tag(ctx, t.RawImageName(), imageTag); err != nil {
 				return err
 			}
-			log.Printf("Pushed release image %q", t.ImageName())
-			pushedContent = append(pushedContent, t.ImageName())
+
+			if err := docker.Push(ctx, imageTag); err != nil {
+				return err
+			}
+
+			// PublishedTag will be used later to refer to the image under the tag we
+			// actually pushed it under
+			t.PublishedTag = imageTag
+
+			log.Printf("Pushed release image %q", imageTag)
+			pushedContent = append(pushedContent, imageTag)
 			// Wait 2 seconds to avoid being rate limited by the registry.
 			time.Sleep(time.Second * 2)
 		}
@@ -559,6 +575,10 @@ func signRegistryContent(ctx context.Context, o *gcbPublishOptions, contentToSig
 
 func buildManifestListName(repo, componentName, tag string) string {
 	return fmt.Sprintf("%s/cert-manager-%s:%s", repo, componentName, tag)
+}
+
+func buildImageTag(repo, componentName, arch, tag string) string {
+	return fmt.Sprintf("%s/cert-manager-%s-%s:%s", repo, componentName, arch, tag)
 }
 
 func errorDuringPublish(err error) error {

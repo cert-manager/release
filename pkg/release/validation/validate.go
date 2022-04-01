@@ -67,17 +67,14 @@ func validateSemver(v string) error {
 	return err
 }
 
-func validateImageBundles(bundles map[string][]images.Tar, opts Options) []string {
+func validateImageBundles(bundles map[string][]*images.Tar, opts Options) []string {
 	var violations []string
-	for componentName, tars := range bundles {
+
+	for _, tars := range bundles {
+		// TODO: check that every tar in tars has the same OS + arch
 		for _, tar := range tars {
-			expectedName := fmt.Sprintf("%s/cert-manager-%s-%s", opts.ImageRepository, componentName, tar.Architecture())
-			actualNameWithoutTag := strings.Split(tar.ImageName(), ":")[0]
-			if expectedName != actualNameWithoutTag {
-				violations = append(violations, fmt.Sprintf("Image %q does not match expected name %q", actualNameWithoutTag, expectedName))
-			}
 			if tar.ImageTag() != opts.ReleaseVersion {
-				violations = append(violations, fmt.Sprintf("Image %q does not have expected tag %q", tar.ImageName(), opts.ReleaseVersion))
+				violations = append(violations, fmt.Sprintf("Image %q does not have expected tag %q", tar.RawImageName(), opts.ReleaseVersion))
 			}
 		}
 	}

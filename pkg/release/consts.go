@@ -75,6 +75,9 @@ const (
 	// --release-version and so it is not suitable for being used as part of a
 	// published release.
 	BuildTypeDevel = "devel"
+
+	// BuildSourceMake indicates that the files were built by make, rather than Bazel
+	BuildSourceMake = "make"
 )
 
 // BucketPathForRelease will assemble an output directory path for the given
