@@ -27,7 +27,7 @@ import (
 func Sign(ctx context.Context, cosignPath string, containers []string, key sign.GCPKMSKey) error {
 	args := append([]string{
 		"sign",
-		"-key",
+		"--key",
 		key.CosignFormat(),
 	}, containers...)
 
