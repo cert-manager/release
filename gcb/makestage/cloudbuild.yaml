@@ -20,7 +20,6 @@ steps:
   - -c
   - |
     set -eu -o pipefail
-    apt-get install -y jq
     make vendor-go
     make CMREL_KEY="${_KMS_KEY}" -j16 release
     gsutil -m cp ./bin/release/* ${_OUTPUT_GCS_URL}
@@ -37,7 +36,7 @@ substitutions:
   _OUTPUT_GCS_URL: ""
   # gcr.io/cloud-builders/bazel does not have tagged images only image digests,
   # so we have to manually find an image with the desired version.
-  _BUILDER_IMAGE_TAG: "20210831-4cf7b0b-4.2.1"
+  _BUILDER_IMAGE_TAG: "20220512-b6ea825-4.2.1"
 
 options:
   machineType: n1-highcpu-32
