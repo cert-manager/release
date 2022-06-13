@@ -34,8 +34,6 @@ substitutions:
   _CM_REPO: "https://github.com/cert-manager/cert-manager.git"
   _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"
   _OUTPUT_GCS_URL: ""
-  # gcr.io/cloud-builders/bazel does not have tagged images only image digests,
-  # so we have to manually find an image with the desired version.
   _BUILDER_IMAGE_TAG: "20220512-b6ea825-4.2.1"
 
 options:
