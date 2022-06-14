@@ -147,11 +147,6 @@ func runMakeStage(rootOpts *rootOptions, o *makeStageOptions) error {
 		build.Options = &cloudbuild.BuildOptions{MachineType: "n1-highcpu-32"}
 	}
 
-	gitRef, err := release.LookupRefSHA(o.Org, o.Repo, o.Ref)
-	if err != nil {
-		return fmt.Errorf("error looking up git commit ref: %w", err)
-	}
-
 	build.Substitutions["_CM_REF"] = o.Ref
 	build.Substitutions["_CM_REPO"] = fmt.Sprintf("https://github.com/%s/%s.git", o.Org, o.Repo)
 	build.Substitutions["_RELEASE_TARGET_BUCKET"] = o.Bucket
@@ -186,10 +181,7 @@ func runMakeStage(rootOpts *rootOptions, o *makeStageOptions) error {
 		return fmt.Errorf("building release with ref %q failed", o.Ref)
 	}
 
-	outputDir := release.BucketPathForRelease(release.DefaultBucketPathPrefix, release.BuildTypeRelease, o.Ref, gitRef)
-	outputGCSURL := fmt.Sprintf("gs://%s/%s", o.Bucket, outputDir)
-
-	log.Printf("Release build complete for %s/%s@%s - artifacts available at: %s", o.Org, o.Repo, o.Ref, outputGCSURL)
+	log.Printf("Release build complete for %s/%s@%s", o.Org, o.Repo, o.Ref)
 
 	return nil
 }
