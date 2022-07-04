@@ -40,3 +40,4 @@ test:
 	go test ./pkg/release/manifests
 	@# go test ./pkg/release/validation  # this one is broken
 	go test ./pkg/sign
+	go test ./pkg/testgen
