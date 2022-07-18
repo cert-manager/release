@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package testgen
+package prowgen
 
 const (
-	// CommonTestImage defines the common base image used across many tests
+	// CommonTestImage defines the common base image used across many prow jobs
 	CommonTestImage = "eu.gcr.io/jetstack-build-infra-images/bazelbuild:20220512-b6ea825-4.2.1"
 
 	// AlertEmailAddress is the address to which testgrid alerts should be sent

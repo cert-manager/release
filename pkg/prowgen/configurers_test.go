@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package testgen
+package prowgen
 
 import (
 	"testing"
@@ -24,7 +24,7 @@ func Test_addStandardE2ELabels_NewKubernetes(t *testing.T) {
 	// on any version of k8s greater than or equal to 1.23 we should enable all feature gates
 	// and use SSA
 	for _, testVersion := range []string{"1.22", "1.23", "1.24", "2.1"} {
-		test := testTemplate(
+		test := jobTemplate(
 			"test-test",
 			"some description",
 			addStandardE2ELabels(testVersion),
@@ -50,7 +50,7 @@ func Test_addStandardE2ELabels_OldKubernetes(t *testing.T) {
 	// on any version of k8s greater than or equal to 1.23 we should enable all feature gates
 	// but disable SSA
 	for _, testVersion := range []string{"1.21", "1.20", "1.0"} {
-		test := testTemplate(
+		test := jobTemplate(
 			"test-test",
 			"some description",
 			addStandardE2ELabels(testVersion),
@@ -87,7 +87,7 @@ func Test_addStandardE2ELabels_ProgrammerError(t *testing.T) {
 	}()
 
 	// programmer error with k8s version should panic
-	testTemplate(
+	jobTemplate(
 		"test-test",
 		"some description",
 		addStandardE2ELabels(k8sVersion),

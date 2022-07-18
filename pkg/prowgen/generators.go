@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package testgen
+package prowgen
 
 import (
 	"fmt"
@@ -23,8 +23,8 @@ import (
 
 // MakeTest generates a test which runs linting and verification targets as well as
 // unit and integration tests
-func MakeTest() *Test {
-	test := testTemplate(
+func MakeTest() *Job {
+	job := jobTemplate(
 		"make-test",
 		"Runs unit and integration tests and verification scripts",
 		addServiceAccountLabel,
@@ -34,7 +34,7 @@ func MakeTest() *Test {
 
 	makeJobs, cpuRequest := calculateMakeConcurrency("2000m")
 
-	test.Spec.Containers = []Container{
+	job.Spec.Containers = []Container{
 		{
 			Image: CommonTestImage,
 			Args: []string{
@@ -54,13 +54,13 @@ func MakeTest() *Test {
 		},
 	}
 
-	return test
+	return job
 }
 
 // ChartTest generates a test which lints helm charts. This is run inside a container
 // and so requires additional permissions.
-func ChartTest() *Test {
-	test := testTemplate(
+func ChartTest() *Job {
+	job := jobTemplate(
 		"chart",
 		"Verifies the Helm chart passes linting checks",
 		addServiceAccountLabel,
@@ -69,7 +69,7 @@ func ChartTest() *Test {
 		addMaxConcurrency(8),
 	)
 
-	test.Spec.Containers = []Container{
+	job.Spec.Containers = []Container{
 		{
 			Image: CommonTestImage,
 			Args: []string{
@@ -90,18 +90,18 @@ func ChartTest() *Test {
 		},
 	}
 
-	return test
+	return job
 }
 
 // E2ETest generates a test which runs end-to-end tests with feature gates enabled. This
 // is run inside a container and requires additional permissions.
-func E2ETest(k8sVersion string) *Test {
+func E2ETest(k8sVersion string) *Job {
 	// we don't want to use dots in names, so replace with dashes
 	nameVersion := strings.ReplaceAll(k8sVersion, ".", "-")
 
 	desc := fmt.Sprintf("Runs the end-to-end test suite against a Kubernetes v%s cluster", k8sVersion)
 
-	test := testTemplate(
+	job := jobTemplate(
 		"e2e-v"+nameVersion,
 		desc,
 		addServiceAccountLabel,
@@ -117,7 +117,7 @@ func E2ETest(k8sVersion string) *Test {
 
 	k8sVersionArg := fmt.Sprintf("K8S_VERSION=%s", k8sVersion)
 
-	test.Spec.Containers = []Container{
+	job.Spec.Containers = []Container{
 		{
 			Image: CommonTestImage,
 			Args: []string{
@@ -143,98 +143,98 @@ func E2ETest(k8sVersion string) *Test {
 		},
 	}
 
-	return test
+	return job
 }
 
 // E2ETestVenafiTPP generates a test which runs end-to-end tests only focusing on Venafi TPP.
 // This runs inside a container and so requires additional permissions.
-func E2ETestVenafiTPP(k8sVersion string) *Test {
-	test := E2ETest(k8sVersion)
+func E2ETestVenafiTPP(k8sVersion string) *Job {
+	job := E2ETest(k8sVersion)
 
-	test.Name = test.Name + "-issuers-venafi-tpp"
-	test.Annotations["description"] = "Runs the E2E tests with 'Venafi TPP' in name"
+	job.Name = job.Name + "-issuers-venafi-tpp"
+	job.Annotations["description"] = "Runs the E2E tests with 'Venafi TPP' in name"
 
-	test.Labels = make(map[string]string)
+	job.Labels = make(map[string]string)
 
-	addDefaultE2EVolumeLabels(test)
-	addDindLabel(test)
-	addMakeVolumesLabel(test)
-	addRetryFlakesLabel(test)
-	addServiceAccountLabel(test)
-	addVenafiTPPLabels(test)
+	addDefaultE2EVolumeLabels(job)
+	addDindLabel(job)
+	addMakeVolumesLabel(job)
+	addRetryFlakesLabel(job)
+	addServiceAccountLabel(job)
+	addVenafiTPPLabels(job)
 
-	return test
+	return job
 }
 
 // E2ETestVenafiCloud generates a test which runs end-to-end tests only focusing on Venafi Cloud.
 // This runs inside a container and so requires additional permissions.
-func E2ETestVenafiCloud(k8sVersion string) *Test {
-	test := E2ETest(k8sVersion)
+func E2ETestVenafiCloud(k8sVersion string) *Job {
+	job := E2ETest(k8sVersion)
 
-	test.Name = test.Name + "-issuers-venafi-cloud"
-	test.Annotations["description"] = "Runs the E2E tests with 'Venafi Cloud' in name"
+	job.Name = job.Name + "-issuers-venafi-cloud"
+	job.Annotations["description"] = "Runs the E2E tests with 'Venafi Cloud' in name"
 
-	test.Labels = make(map[string]string)
+	job.Labels = make(map[string]string)
 
-	addDefaultE2EVolumeLabels(test)
-	addDindLabel(test)
-	addMakeVolumesLabel(test)
-	addRetryFlakesLabel(test)
-	addServiceAccountLabel(test)
-	addVenafiCloudLabels(test)
+	addDefaultE2EVolumeLabels(job)
+	addDindLabel(job)
+	addMakeVolumesLabel(job)
+	addRetryFlakesLabel(job)
+	addServiceAccountLabel(job)
+	addVenafiCloudLabels(job)
 
-	return test
+	return job
 }
 
 // E2ETestVenafiBoth generates a test which runs end-to-end tests focusing on
 // both Venafi TPP and Venafi Cloud.
 // This runs inside a container and so requires additional permissions.
-func E2ETestVenafiBoth(k8sVersion string) *Test {
-	test := E2ETest(k8sVersion)
+func E2ETestVenafiBoth(k8sVersion string) *Job {
+	job := E2ETest(k8sVersion)
 
-	test.Name = test.Name + "-issuers-venafi"
-	test.Annotations["description"] = "Runs Venafi (VaaS and TPP) e2e tests"
+	job.Name = job.Name + "-issuers-venafi"
+	job.Annotations["description"] = "Runs Venafi (VaaS and TPP) e2e tests"
 
-	test.Labels = make(map[string]string)
+	job.Labels = make(map[string]string)
 
-	addDefaultE2EVolumeLabels(test)
-	addDindLabel(test)
-	addMakeVolumesLabel(test)
-	addRetryFlakesLabel(test)
-	addServiceAccountLabel(test)
-	addVenafiBothLabels(test)
+	addDefaultE2EVolumeLabels(job)
+	addDindLabel(job)
+	addMakeVolumesLabel(job)
+	addRetryFlakesLabel(job)
+	addServiceAccountLabel(job)
+	addVenafiBothLabels(job)
 
-	return test
+	return job
 }
 
 // E2ETestFeatureGatesDisabled generates a test which runs e2e tests with feature gates disabled
-func E2ETestFeatureGatesDisabled(k8sVersion string) *Test {
-	test := E2ETest(k8sVersion)
+func E2ETestFeatureGatesDisabled(k8sVersion string) *Job {
+	job := E2ETest(k8sVersion)
 
-	test.Name = test.Name + "-feature-gates-disabled"
-	test.Annotations["description"] = "Runs the E2E tests with all feature gates disabled"
+	job.Name = job.Name + "-feature-gates-disabled"
+	job.Annotations["description"] = "Runs the E2E tests with all feature gates disabled"
 
-	test.Labels = make(map[string]string)
+	job.Labels = make(map[string]string)
 
-	addCloudflareCredentialsLabel(test)
-	addDefaultE2EVolumeLabels(test)
-	addDindLabel(test)
-	addDisableFeatureGatesLabel(test)
-	addGinkgoSkipDefaultLabel(test)
-	addMakeVolumesLabel(test)
-	addRetryFlakesLabel(test)
-	addServiceAccountLabel(test)
+	addCloudflareCredentialsLabel(job)
+	addDefaultE2EVolumeLabels(job)
+	addDindLabel(job)
+	addDisableFeatureGatesLabel(job)
+	addGinkgoSkipDefaultLabel(job)
+	addMakeVolumesLabel(job)
+	addRetryFlakesLabel(job)
+	addServiceAccountLabel(job)
 
-	return test
+	return job
 }
 
 // UpgradeTest generates a test which tests an upgrade from the latest released version
 // of cert-manager to the version specified by the test ref / branch. This test runs
 // inside a container and so requires additional privileges.
-func UpgradeTest(k8sVersion string) *Test {
+func UpgradeTest(k8sVersion string) *Job {
 	nameVersion := strings.ReplaceAll(k8sVersion, ".", "-")
 
-	test := testTemplate(
+	job := jobTemplate(
 		"e2e-v"+nameVersion+"-upgrade",
 		"Runs cert-manager upgrade from latest published release",
 		addServiceAccountLabel,
@@ -246,7 +246,7 @@ func UpgradeTest(k8sVersion string) *Test {
 
 	k8sVersionArg := fmt.Sprintf("K8S_VERSION=%s", k8sVersion)
 
-	test.Spec.Containers = []Container{
+	job.Spec.Containers = []Container{
 		{
 			Image: CommonTestImage,
 			Args: []string{
@@ -271,5 +271,5 @@ func UpgradeTest(k8sVersion string) *Test {
 		},
 	}
 
-	return test
+	return job
 }

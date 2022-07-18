@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package testgen
+package prowgen
 
 // There are upstream definitions of these structs here:
 // https://github.com/kubernetes/test-infra/blob/857418c31f6963014ac8821c63e1053c2c0e7e88/prow/config/jobs.go
@@ -22,12 +22,12 @@ package testgen
 // Rather than importing the prow struct definitions (and pulling in a bunch of dependencies)
 // we copy the structs + fields we actually use in practice here
 
-type TestFile struct {
-	Presubmits map[string][]*PresubmitTest `yaml:"presubmits"`
-	Periodics  []*PeriodicTest             `yaml:"periodics"`
+type JobFile struct {
+	Presubmits map[string][]*PresubmitJob `yaml:"presubmits"`
+	Periodics  []*PeriodicJob             `yaml:"periodics"`
 }
 
-type Test struct {
+type Job struct {
 	Name string `yaml:"name"`
 
 	MaxConcurrency int `yaml:"max_concurrency"`
@@ -40,10 +40,10 @@ type Test struct {
 
 	Labels map[string]string `yaml:"labels"`
 
-	Spec TestSpec `yaml:"spec"`
+	Spec JobSpec `yaml:"spec"`
 }
 
-type TestSpec struct {
+type JobSpec struct {
 	Containers []Container `yaml:"containers"`
 	DNSConfig  DNSConfig   `yaml:"dnsConfig"`
 }
@@ -97,8 +97,8 @@ type SecurityContextCapabilities struct {
 	Add []string `yaml:"add"`
 }
 
-type PresubmitTest struct {
-	Test `yaml:",inline"`
+type PresubmitJob struct {
+	Job `yaml:",inline"`
 
 	Branches []string `yaml:"branches"`
 
@@ -106,8 +106,8 @@ type PresubmitTest struct {
 	Optional  bool `yaml:"optional"`
 }
 
-type PeriodicTest struct {
-	Test `yaml:",inline"`
+type PeriodicJob struct {
+	Job `yaml:",inline"`
 
 	ExtraRefs []ExtraRef `yaml:"extra_refs"`
 

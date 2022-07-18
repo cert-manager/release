@@ -84,7 +84,7 @@ func Execute() {
 	cmd.AddCommand(publishCmd(o))
 	cmd.AddCommand(bootstrapPGPCmd(o))
 	cmd.AddCommand(signCmd(o))
-	cmd.AddCommand(generateTestsCmd(o))
+	cmd.AddCommand(generateProwCmd(o))
 
 	if err := cmd.Execute(); err != nil {
 		fmt.Println(err)
