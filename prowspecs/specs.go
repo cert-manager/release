@@ -27,6 +27,9 @@ import (
 // THIS IS WHAT YOU'RE MOST LIKELY TO NEED TO EDIT
 // The branches and kubernetes versions below are likely to need to be updated after each
 // cert-manager release!
+
+// NB: There's at least one configurer (pkg/prowgen/configurers.go) which will changes its operations
+// based on the k8s version it's being run against.
 var modes map[string]ModeSpec = map[string]ModeSpec{
 	"previous": ModeSpec{
 		prowContext: &prowgen.ProwContext{
