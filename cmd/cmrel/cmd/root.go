@@ -74,7 +74,9 @@ func mustMarkRequired(markRequired func(string) error) func(string) {
 
 func Execute() {
 	o := &rootOptions{}
+
 	cmd := rootCmd(o)
+
 	cmd.AddCommand(stagedCmd(o))
 	cmd.AddCommand(stageCmd(o))
 	cmd.AddCommand(makeStageCmd(o))
@@ -82,6 +84,8 @@ func Execute() {
 	cmd.AddCommand(publishCmd(o))
 	cmd.AddCommand(bootstrapPGPCmd(o))
 	cmd.AddCommand(signCmd(o))
+	cmd.AddCommand(generateProwCmd(o))
+
 	if err := cmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
