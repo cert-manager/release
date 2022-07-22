@@ -90,8 +90,10 @@ func (pc *ProwContext) addPresubmit(job *Job, alwaysRun bool, optional bool) {
 // Periodic adds periodic jobs which will run every `periodicityHours` hours, at some minute
 // within the hour, one job for each configured branch
 func (pc *ProwContext) Periodics(job *Job, periodicityHours int) {
+	originalName := job.Name
+
 	for _, branch := range pc.Branches {
-		job.Name = pc.periodicJobName(job.Name)
+		job.Name = pc.periodicJobName(originalName, branch)
 
 		if pc.PeriodicDashboardName != "" {
 			addTestGridAnnotations(pc.PeriodicDashboardName)(job)
@@ -131,8 +133,18 @@ func (pc *ProwContext) presubmitJobName(name string) string {
 	return fmt.Sprintf("pull-%s-%s", pc.Repo, name)
 }
 
-func (pc *ProwContext) periodicJobName(name string) string {
-	return fmt.Sprintf("ci-%s-%s%s", pc.Repo, pc.printableDescriptor(), name)
+// periodicJobName takes a name and branch and returns a name for a periodic job. The branch is required as
+// it doesn't seem to be possible to specify multiple branches for a single periodic job definition.
+func (pc *ProwContext) periodicJobName(name string, branch string) string {
+	usedBranchID := branch
+
+	// if the branch might be formatted "release-xxx", then just use "xxx"
+	parts := strings.Split(branch, "-")
+	if len(parts) == 2 {
+		usedBranchID = parts[1]
+	}
+
+	return fmt.Sprintf("ci-%s-%s%s-%s", pc.Repo, pc.printableDescriptor(), name, usedBranchID)
 }
 
 func (pc *ProwContext) printableDescriptor() string {
