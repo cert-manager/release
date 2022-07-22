@@ -33,7 +33,7 @@ import (
 var modes map[string]ModeSpec = map[string]ModeSpec{
 	"previous": ModeSpec{
 		prowContext: &prowgen.ProwContext{
-			Branches: []string{"release-1.8"},
+			Branches: []string{"release-1.8", "release-1.9"},
 
 			// NB: we don't use a presubmit dashboard on previous currently
 			PresubmitDashboardName: "",
@@ -67,24 +67,25 @@ var modes map[string]ModeSpec = map[string]ModeSpec{
 		primaryKubernetesVersion: "1.24",
 		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
 	},
-	"next": ModeSpec{
-		prowContext: &prowgen.ProwContext{
-			Branches: []string{"release-1.9"},
+	// next is only required after we create an initial alpha for a release
+	// "next": ModeSpec{
+	// 	prowContext: &prowgen.ProwContext{
+	// 		Branches: []string{"release-something"},
 
-			// NB: we don't use a presubmit dashboard on next currently
-			PresubmitDashboardName: "",
-			PeriodicDashboardName:  "jetstack-cert-manager-next",
+	// 		// NB: we don't use a presubmit dashboard on next currently
+	// 		PresubmitDashboardName: "",
+	// 		PeriodicDashboardName:  "jetstack-cert-manager-next",
 
-			Org:  "cert-manager",
-			Repo: "cert-manager",
+	// 		Org:  "cert-manager",
+	// 		Repo: "cert-manager",
 
-			// Descriptor inserts "next" into periodic names
-			Descriptor: "next",
-		},
+	// 		// Descriptor inserts "next" into periodic names
+	// 		Descriptor: "next",
+	// 	},
 
-		primaryKubernetesVersion: "1.24",
-		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
-	},
+	// 	primaryKubernetesVersion: "1.24",
+	// 	otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
+	// },
 }
 
 // ModeSpec holds a specification of an entire test suite for a given mode or "channel", such as "previous",
@@ -105,6 +106,7 @@ func (m *ModeSpec) GenerateJobFile() *prowgen.JobFile {
 	m.prowContext.RequiredPresubmit(prowgen.MakeTest())
 	m.prowContext.RequiredPresubmit(prowgen.ChartTest())
 
+	// TODO: might only want to generate a test for a secondary version for a subset of branches in a release
 	for _, secondaryVersion := range m.otherKubernetesVersions {
 		m.prowContext.OptionalPresubmit(prowgen.E2ETest(secondaryVersion))
 	}
