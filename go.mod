@@ -16,6 +16,7 @@ require (
 	golang.org/x/mod v0.4.2
 	golang.org/x/oauth2 v0.0.0-20210819190943-2bc19b11175f
 	google.golang.org/api v0.56.0
+	gopkg.in/yaml.v2 v2.4.0
 	helm.sh/helm/v3 v3.7.0
 	k8s.io/apimachinery v0.22.1
 	k8s.io/utils v0.0.0-20210707171843-4b05e18ac7d9
@@ -41,7 +42,6 @@ require (
 	google.golang.org/genproto v0.0.0-20210828152312-66f60bf46e71 // indirect
 	google.golang.org/grpc v1.40.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	k8s.io/klog/v2 v2.9.0 // indirect
 )

@@ -11,7 +11,7 @@
 # (Please do not remove this security notice.)
 steps:
 
-  - name: gcr.io/cloud-builders/go:alpine-1.16
+  - name: gcr.io/cloud-builders/go:alpine-1.18
   dir: "go/src/github.com/cert-manager/release"
   entrypoint: sh
   secretEnv:
