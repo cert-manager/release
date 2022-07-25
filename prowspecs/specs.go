@@ -23,86 +23,75 @@ import (
 	"github.com/cert-manager/release/pkg/prowgen"
 )
 
-// modes specifies a ModeSpec for each possible mode
+// knownBranches specifies a BranchSpec for each possible branch to test against
 // THIS IS WHAT YOU'RE MOST LIKELY TO NEED TO EDIT
-// The branches and kubernetes versions below are likely to need to be updated after each
-// cert-manager release!
+// The branches and kubernetes versions below are likely to need to be updated after each cert-manager release!
 
 // NB: There's at least one configurer (pkg/prowgen/configurers.go) which will changes its operations
 // based on the k8s version it's being run against.
-var modes map[string]ModeSpec = map[string]ModeSpec{
-	"previous": ModeSpec{
-		prowContext: &prowgen.ProwContext{
-			Branches: []string{"release-1.8", "release-1.9"},
 
-			// NB: we don't use a presubmit dashboard on previous currently
-			PresubmitDashboardName: "",
-			PeriodicDashboardName:  "jetstack-cert-manager-previous",
+var knownBranches map[string]BranchSpec = map[string]BranchSpec{
+	"release-1.8": BranchSpec{
+		prowContext: &prowgen.ProwContext{
+			Branch: "release-1.8",
+
+			// NB: we don't use a presubmit dashboard outside of "master", currently
+			PresubmitDashboard: false,
+			PeriodicDashboard:  true,
 
 			Org:  "cert-manager",
 			Repo: "cert-manager",
-
-			// Descriptor inserts "previous" into periodic names
-			Descriptor: "previous",
 		},
 
 		primaryKubernetesVersion: "1.24",
 		otherKubernetesVersions:  []string{"1.19", "1.20", "1.21", "1.22", "1.23"},
 	},
-	"current": ModeSpec{
+	"release-1.9": BranchSpec{
 		prowContext: &prowgen.ProwContext{
-			Branches: []string{"master"},
+			Branch: "release-1.9",
 
-			PresubmitDashboardName: "jetstack-cert-manager-presubmits-blocking",
-			PeriodicDashboardName:  "jetstack-cert-manager-master",
+			// NB: we don't use a presubmit dashboard outside of "master", currently
+			PresubmitDashboard: false,
+			PeriodicDashboard:  true,
 
 			Org:  "cert-manager",
 			Repo: "cert-manager",
-
-			// Descriptor is what's added to periodic test names; for master we don't add anything
-			// so we have "ci-cert-manager-e2e-v1-20" and not "ci-cert-manager-current-e2e-v1-20"
-			Descriptor: "",
 		},
 
 		primaryKubernetesVersion: "1.24",
 		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
 	},
-	// next is only required after we create an initial alpha for a release
-	// "next": ModeSpec{
-	// 	prowContext: &prowgen.ProwContext{
-	// 		Branches: []string{"release-something"},
+	"master": BranchSpec{
+		prowContext: &prowgen.ProwContext{
+			Branch: "master",
 
-	// 		// NB: we don't use a presubmit dashboard on next currently
-	// 		PresubmitDashboardName: "",
-	// 		PeriodicDashboardName:  "jetstack-cert-manager-next",
+			PresubmitDashboard: true,
+			PeriodicDashboard:  true,
 
-	// 		Org:  "cert-manager",
-	// 		Repo: "cert-manager",
+			Org:  "cert-manager",
+			Repo: "cert-manager",
+		},
 
-	// 		// Descriptor inserts "next" into periodic names
-	// 		Descriptor: "next",
-	// 	},
-
-	// 	primaryKubernetesVersion: "1.24",
-	// 	otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
-	// },
+		primaryKubernetesVersion: "1.24",
+		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
+	},
 }
 
-// ModeSpec holds a specification of an entire test suite for a given mode or "channel", such as "previous",
-// "current" or "next". That includes:
-// - a ProwContext specifying things like the repo, branch(es), dashboard names
+// BranchSpec holds a specification of an entire test suite for a given branch, such as "master" or "release-1.9"
+// That includes:
+// - a ProwContext specifying things like the the repo, branch, dashboard names
 // - the primary Kubernetes version (which is the version whose tests are always run for presubmits, among other uses)
 // - the secondary Kubernetes versions, which are the rest of the supported versions for which tests should be generated
-type ModeSpec struct {
+type BranchSpec struct {
 	prowContext *prowgen.ProwContext
 
 	primaryKubernetesVersion string
 	otherKubernetesVersions  []string
 }
 
-// GenerateJobFile will create a complete test file based on the ModeSpec `m`. This
-// assumes that all tests for all of `previous`, `current` and `next` should be the same.
-func (m *ModeSpec) GenerateJobFile() *prowgen.JobFile {
+// GenerateJobFile will create a complete test file based on the BranchSpec. This
+// assumes that all tests for all branches should be the same.
+func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 	m.prowContext.RequiredPresubmit(prowgen.MakeTest())
 	m.prowContext.RequiredPresubmit(prowgen.ChartTest())
 
@@ -143,24 +132,24 @@ func (m *ModeSpec) GenerateJobFile() *prowgen.JobFile {
 	return m.prowContext.JobFile()
 }
 
-// ValidModes returns a string containing the names of each recognised valid mode
-func ValidModes() string {
-	var availableModes []string
+// KnownBranches returns a list of all branches which have been configured here
+func KnownBranches() string {
+	var availableBranches []string
 
-	for mode, _ := range modes {
-		availableModes = append(availableModes, mode)
+	for branch, _ := range knownBranches {
+		availableBranches = append(availableBranches, branch)
 	}
 
-	return strings.Join(availableModes, ", ")
+	return strings.Join(availableBranches, ", ")
 }
 
-// SpecForMode returns a spec for the named mode, if it exists
-func SpecForMode(originalMode string) (ModeSpec, error) {
-	mode := strings.ToLower(originalMode)
+// SpecForBranch returns a spec for the named branch, if it exists
+func SpecForBranch(originalBranch string) (BranchSpec, error) {
+	branch := strings.ToLower(originalBranch)
 
-	spec, ok := modes[mode]
+	spec, ok := knownBranches[branch]
 	if !ok {
-		return ModeSpec{}, fmt.Errorf("unknown mode %q; valid modes are %q", originalMode, ValidModes())
+		return BranchSpec{}, fmt.Errorf("unknown branch %q; known branches are %q", originalBranch, KnownBranches())
 	}
 
 	return spec, nil

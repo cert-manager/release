@@ -19,35 +19,31 @@ package prowgen
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 )
 
 // ProwContext holds jobs and information required to configure jobs for a given release channel.
 type ProwContext struct {
-	// Branches is the list of branches for which a given test should be added. The same test will be added
-	// for every branch.
-	Branches []string
+	// Branch is the name of the branch corresponding to the release channel modelled by this ProwContext.
+	// While it's possible to define a presubmit for multiple branches, this often doesn't correctly model
+	// how cert-manager uses prow in practice - usually, we want a different set of supported kubernetes
+	// versions for each major cert-manager release (and therefore branch), and in any case want a different
+	// dashboard for each supported release channel.
+	Branch string
 
-	// PresubmitDashboardName is the name of the TestGrid dashboard to which presubmit jobs should
-	// be added. If unset, no TestGrid annotations will be added to presubmit jobs.
-	PresubmitDashboardName string
+	// PresubmitDashboard, if set, will generate a presubmit dashboard name based on the branch name
+	// for each presubmit job. If false, no presubmits will be added to a dashboard.
+	PresubmitDashboard bool
 
-	// PeriodicDashboardName is the name of the TestGrid dashboard to which periodic jobs should
-	// be added. If unset, no TestGrid annotations will be added to periodic jobs.
-	PeriodicDashboardName string
+	// PeriodicDashboard, if set, will generate a periodic dashboard name based on the branch name
+	// for each periodic job. If false, no periodics will be added to a dashboard.
+	PeriodicDashboard bool
 
 	// Org is the GitHub organisation of the repository under test.
 	Org string
 
 	// Repo is the GitHub repository name of the repository under test.
 	Repo string
-
-	// Descriptor is a string which, if set, is inserted into periodic test names.
-	// An example would be "previous" which would result in "my-test" having the name
-	// "ci-<repo>-previous-my-test", where the test would've been called
-	// "ci-<repo>-my-test" if the descriptor was not set
-	Descriptor string
 
 	presubmits []*PresubmitJob
 	periodics  []*PeriodicJob
@@ -75,13 +71,14 @@ func (pc *ProwContext) OptionalPresubmit(job *Job) {
 func (pc *ProwContext) addPresubmit(job *Job, alwaysRun bool, optional bool) {
 	job.Name = pc.presubmitJobName(job.Name)
 
-	if pc.PresubmitDashboardName != "" {
-		addTestGridAnnotations(pc.PresubmitDashboardName)(job)
+	if pc.PresubmitDashboard {
+		addTestGridAnnotations(pc.presubmitDashboardName())(job)
 	}
 
 	pc.presubmits = append(pc.presubmits, &PresubmitJob{
-		Job:       *job,
-		Branches:  pc.Branches,
+		Job: *job,
+		// see the comment on ProwContext.Branch for why we only support a single branch here
+		Branches:  []string{pc.Branch},
 		AlwaysRun: alwaysRun,
 		Optional:  optional,
 	})
@@ -92,27 +89,25 @@ func (pc *ProwContext) addPresubmit(job *Job, alwaysRun bool, optional bool) {
 func (pc *ProwContext) Periodics(job *Job, periodicityHours int) {
 	originalName := job.Name
 
-	for _, branch := range pc.Branches {
-		job.Name = pc.periodicJobName(originalName, branch)
+	job.Name = pc.periodicJobName(originalName)
 
-		if pc.PeriodicDashboardName != "" {
-			addTestGridAnnotations(pc.PeriodicDashboardName)(job)
-		}
-
-		pc.periodics = append(pc.periodics, &PeriodicJob{
-			Job: *job,
-			ExtraRefs: []ExtraRef{
-				{
-					Org:     pc.Org,
-					Repo:    pc.Repo,
-					BaseRef: branch,
-				},
-			},
-			Interval: strconv.Itoa(periodicityHours) + "h",
-			// TODO: use Cron instead of Interval
-			// Cron: pc.cronSchedule(periodicityHours),
-		})
+	if pc.PeriodicDashboard {
+		addTestGridAnnotations(pc.periodicDashboardName())(job)
 	}
+
+	pc.periodics = append(pc.periodics, &PeriodicJob{
+		Job: *job,
+		ExtraRefs: []ExtraRef{
+			{
+				Org:     pc.Org,
+				Repo:    pc.Repo,
+				BaseRef: pc.Branch,
+			},
+		},
+		Interval: strconv.Itoa(periodicityHours) + "h",
+		// TODO: use Cron instead of Interval
+		// Cron: pc.cronSchedule(periodicityHours),
+	})
 }
 
 func (pc *ProwContext) JobFile() *JobFile {
@@ -129,30 +124,24 @@ func (pc *ProwContext) JobFile() *JobFile {
 	}
 }
 
+// presubmitJobName returns a prow name for the given presubmit job. For example,
+// for the branch "release-1.0" and the test "foo", this would return "pull-cert-manager-release-1.0-foo"
 func (pc *ProwContext) presubmitJobName(name string) string {
-	return fmt.Sprintf("pull-%s-%s", pc.Repo, name)
+	return fmt.Sprintf("pull-%s-%s-%s", pc.Repo, pc.Branch, name)
 }
 
-// periodicJobName takes a name and branch and returns a name for a periodic job. The branch is required as
-// it doesn't seem to be possible to specify multiple branches for a single periodic job definition.
-func (pc *ProwContext) periodicJobName(name string, branch string) string {
-	usedBranchID := branch
-
-	// if the branch might be formatted "release-xxx", then just use "xxx"
-	parts := strings.Split(branch, "-")
-	if len(parts) == 2 {
-		usedBranchID = parts[1]
-	}
-
-	return fmt.Sprintf("ci-%s-%s%s-%s", pc.Repo, pc.printableDescriptor(), name, usedBranchID)
+// periodicJobName returns a prow name for the given periodic job. For example,
+// for the branch "release-1.0" and the test "foo", this would return "ci-cert-manager-release-1.0-foo"
+func (pc *ProwContext) periodicJobName(name string) string {
+	return fmt.Sprintf("ci-%s-%s-%s", pc.Repo, pc.Branch, name)
 }
 
-func (pc *ProwContext) printableDescriptor() string {
-	if pc.Descriptor == "" {
-		return pc.Descriptor
-	}
+func (pc *ProwContext) presubmitDashboardName() string {
+	return fmt.Sprintf("%s-presubmits-%s", pc.Repo, pc.Branch)
+}
 
-	return strings.Trim(pc.Descriptor, "-") + "-"
+func (pc *ProwContext) periodicDashboardName() string {
+	return fmt.Sprintf("%s-periodics-%s", pc.Repo, pc.Branch)
 }
 
 func (pc *ProwContext) cronSchedule(periodicityHours int) string {
