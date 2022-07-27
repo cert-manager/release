@@ -45,6 +45,10 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 
 		primaryKubernetesVersion: "1.24",
 		otherKubernetesVersions:  []string{"1.19", "1.20", "1.21", "1.22", "1.23"},
+
+		// see comment for BranchSpec.skipUpgradeTest
+		// Once release-1.8 is deprecated, skipUpgradeTest can be removed entirely
+		skipUpgradeTest: true,
 	},
 	"release-1.9": BranchSpec{
 		prowContext: &prowgen.ProwContext{
@@ -87,6 +91,12 @@ type BranchSpec struct {
 
 	primaryKubernetesVersion string
 	otherKubernetesVersions  []string
+
+	// skipUpgradeTest if set will cause the upgrade test to not be added to periodics or presubmits.
+	// This is because the test is manually specified using bazel for release-1.8, and the test isn't implemented
+	// in make. Efforts to backport things like tests have proven difficult, so let's make the change here
+	// rather than trying to backport the upgrade test.
+	skipUpgradeTest bool
 }
 
 // GenerateJobFile will create a complete test file based on the BranchSpec. This
@@ -95,13 +105,17 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 	m.prowContext.RequiredPresubmit(prowgen.MakeTest())
 	m.prowContext.RequiredPresubmit(prowgen.ChartTest())
 
-	// TODO: might only want to generate a test for a secondary version for a subset of branches in a release
 	for _, secondaryVersion := range m.otherKubernetesVersions {
 		m.prowContext.OptionalPresubmit(prowgen.E2ETest(secondaryVersion))
 	}
 
 	m.prowContext.RequiredPresubmit(prowgen.E2ETest(m.primaryKubernetesVersion))
-	m.prowContext.RequiredPresubmit(prowgen.UpgradeTest(m.primaryKubernetesVersion))
+
+	if !m.skipUpgradeTest {
+		// TODO: 1.8 is the last version which doesn't support make-based upgrade tests. This can be
+		// done unconditionally when 1.8 is deprecated.
+		m.prowContext.RequiredPresubmit(prowgen.UpgradeTest(m.primaryKubernetesVersion))
+	}
 
 	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiTPP(m.primaryKubernetesVersion))
 	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiCloud(m.primaryKubernetesVersion))
@@ -119,13 +133,17 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 	}
 
 	m.prowContext.Periodics(prowgen.E2ETestVenafiBoth(m.primaryKubernetesVersion), 12)
-	m.prowContext.Periodics(prowgen.UpgradeTest(m.primaryKubernetesVersion), 8)
 
-	// TODO: roll this into above for loop; we have two for loops here to preserve the
-	// ordering of the tests in the output file, making it easier to review the
-	// differences between generated tests and existing handwritten tests
+	if !m.skipUpgradeTest {
+		// TODO: 1.8 is the last version which doesn't support make-based upgrade tests. This can be
+		// done unconditionally when 1.8 is deprecated.
+		m.prowContext.Periodics(prowgen.UpgradeTest(m.primaryKubernetesVersion), 8)
+	}
 
 	for _, kubernetesVersion := range allKubernetesVersions {
+		// TODO: roll this into above for loop; we have two for loops here to preserve the
+		// ordering of the tests in the output file, making it easier to review the
+		// differences between generated tests and existing handwritten tests
 		m.prowContext.Periodics(prowgen.E2ETestFeatureGatesDisabled(kubernetesVersion), 24)
 	}
 
