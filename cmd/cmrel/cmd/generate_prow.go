@@ -36,11 +36,11 @@ import (
 const (
 	generateProwCommand         = "generate-prow"
 	generateProwDescription     = "Generate YAML specifying prow tests for cert-manager"
-	generateProwLongDescription = `generate-prow creates prow test specifications for a given cert-manager release 'channel', which
-define the Prow tests available to be run for that 'channel'.
+	generateProwLongDescription = `generate-prow creates prow test specifications for a given cert-manager release branch. These specifications
+define the Prow tests available to be run against a given branch.
 
-That includes both presubmit tests (tests that can be run against PRs) and periodic
-tests (tests which are run regularly).
+Generated tests include both presubmit tests (tests that can be run against PRs) and periodic
+tests (tests which are run on a schedule, independently of PRs).
 
 By generating this config we avoid the need for humans to edit YAML manually
 which is error-prone.`
@@ -48,21 +48,21 @@ which is error-prone.`
 
 var (
 	generateProwExample = fmt.Sprintf(`
-To generate tests for the previous release:
+To generate tests for the a branch called foo:
 
-	%s %s --mode=previous
+	%s %s --branch=foo
 `, rootCommand, generateProwCommand)
 )
 
 type generateProwOptions struct {
-	// Mode specifies which type of test "channel" to generate, e.g. "previous" or "master"
-	Mode string
+	// Branch specifies the name of the branch whose tests should be generated
+	Branch string
 }
 
 func (o *generateProwOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
-	fs.StringVar(&o.Mode, "mode", "", fmt.Sprintf("Type of tests to generate; one of %s", prowspecs.ValidModes()))
+	fs.StringVar(&o.Branch, "branch", "", fmt.Sprintf("Type of tests to generate; one of %s", prowspecs.KnownBranches()))
 
-	markRequired("mode")
+	markRequired("branch")
 }
 
 func generateProwCmd(rootOpts *rootOptions) *cobra.Command {
@@ -94,7 +94,7 @@ func sanitizedArgs() []string {
 }
 
 func runGenerateProw(rootOpts *rootOptions, o *generateProwOptions) error {
-	spec, err := prowspecs.SpecForMode(o.Mode)
+	spec, err := prowspecs.SpecForBranch(o.Branch)
 	if err != nil {
 		return err
 	}
