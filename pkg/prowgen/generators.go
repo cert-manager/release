@@ -273,3 +273,43 @@ func UpgradeTest(k8sVersion string) *Job {
 
 	return job
 }
+
+// TrivyTest generates a test which runs a Trivy scan of a built container image which matches the given name.
+// Note that there's also a "make trivy-scan-all" target, but this will fail as soon as one of its dependencies fails,
+// so e.g. if there's a vuln in the "controller" container we might never scan "ctl" container.
+// Instead, we generate a test for each container so it's obvious which ones have failures and it's easier to get results
+// for each container
+func TrivyTest(containerName string) *Job {
+	containerName = strings.ToLower(containerName)
+
+	job := jobTemplate(
+		fmt.Sprintf("trivy-test-%s", containerName),
+		fmt.Sprintf("Runs a Trivy scan against the %s container", containerName),
+		addServiceAccountLabel,
+		addMakeVolumesLabel,
+		addMaxConcurrency(2),
+	)
+
+	makeJobs, cpuRequest := calculateMakeConcurrency("1000m")
+
+	job.Spec.Containers = []Container{
+		{
+			Image: CommonTestImage,
+			Args: []string{
+				"runner",
+				"make",
+				makeJobs,
+				"vendor-go",
+				fmt.Sprintf("trivy-scan-%s", containerName),
+			},
+			Resources: ContainerResources{
+				Requests: ContainerResourceRequest{
+					CPU:    cpuRequest,
+					Memory: "2Gi",
+				},
+			},
+		},
+	}
+
+	return job
+}
