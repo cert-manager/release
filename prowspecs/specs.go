@@ -49,6 +49,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		// see comment for BranchSpec.skipUpgradeTest
 		// Once release-1.8 is deprecated, skipUpgradeTest can be removed entirely
 		skipUpgradeTest: true,
+
+		skipTrivy: true,
 	},
 	"release-1.9": BranchSpec{
 		prowContext: &prowgen.ProwContext{
@@ -64,6 +66,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 
 		primaryKubernetesVersion: "1.24",
 		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
+
+		skipTrivy: true,
 	},
 	"master": BranchSpec{
 		prowContext: &prowgen.ProwContext{
@@ -97,6 +101,9 @@ type BranchSpec struct {
 	// in make. Efforts to backport things like tests have proven difficult, so let's make the change here
 	// rather than trying to backport the upgrade test.
 	skipUpgradeTest bool
+
+	// skipTrivy skips generating tests relating to vulnerability scanning since this wasn't backported.
+	skipTrivy bool
 }
 
 // GenerateJobFile will create a complete test file based on the BranchSpec. This
@@ -145,6 +152,12 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 		// ordering of the tests in the output file, making it easier to review the
 		// differences between generated tests and existing handwritten tests
 		m.prowContext.Periodics(prowgen.E2ETestFeatureGatesDisabled(kubernetesVersion), 24)
+	}
+
+	if !m.skipTrivy {
+		for _, container := range []string{"controller", "acmesolver", "ctl", "cainjector", "webhook"} {
+			m.prowContext.Periodics(prowgen.TrivyTest(container), 24)
+		}
 	}
 
 	return m.prowContext.JobFile()
