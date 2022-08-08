@@ -33,7 +33,7 @@ substitutions:
   _CM_REPO: "https://github.com/cert-manager/cert-manager.git"
   _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"
   _RELEASE_TARGET_BUCKET: "cert-manager-release"
-  _BUILDER_IMAGE_TAG: "20220512-b6ea825-4.2.1"
+  _BUILDER_IMAGE_TAG: "20220512-ee75d11-4.2.1"
 
 options:
   machineType: n1-highcpu-32
