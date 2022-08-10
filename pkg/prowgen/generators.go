@@ -287,6 +287,7 @@ func TrivyTest(containerName string) *Job {
 		fmt.Sprintf("Runs a Trivy scan against the %s container", containerName),
 		addServiceAccountLabel,
 		addMakeVolumesLabel,
+		addDindLabel,
 		addMaxConcurrency(2),
 	)
 
