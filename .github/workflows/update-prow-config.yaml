@@ -1,0 +1,46 @@
+# When a cert-manager/release PR is merged, this workflow generates prow
+# testing config for a set of cert-manager branches, and if out-of-sync with
+# jetstack/testing master, will create a new PR with those changes.
+#
+# We use the https://github.com/peter-evans/create-pull-request action to
+# create a pull request if it is needed.
+
+name: Update jetstack/testing with cert-manager/cert-manager prow test config.
+on:
+  push:
+    branches-ignore:
+      - main
+jobs:
+  update-prow-config:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: install_go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+    - name: checkout
+      uses: actions/checkout@v3
+      with:
+        path: release
+    - name: checkout
+      uses: actions/checkout@v3
+      with:
+        repository: jetstack/testing
+        path: testing
+    - name: Generate prow config.
+      run: |
+        cd release && go install ./cmd/cmrel && cd -
+        cd testing/config/jobs/cert-manager/cert-manager
+        # Preserve hand-rolled bazel tests and READMEs
+        find . ! \( -name '*bazel*' -o -name '*.md' \) -type f -exec rm -rf {} +
+        # Delete empty directories
+        find . -empty -type d -delete
+        cmrel generate-prow  --branch '*' -o file
+      - uses: peter-evans/create-pull-request@v4
+        id: cpr
+        name: Create Pull Request is there are changes
+      - name: Check outputs
+        if: ${{ steps.cpr.outputs.pull-request-number }}
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
