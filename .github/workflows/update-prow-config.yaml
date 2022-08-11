@@ -8,8 +8,8 @@
 name: Update jetstack/testing with cert-manager/cert-manager prow test config.
 on:
   push:
-    branches-ignore:
-      - main
+    branches:
+      - master
 jobs:
   update-prow-config:
     runs-on: ubuntu-22.04
