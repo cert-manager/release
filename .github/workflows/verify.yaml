@@ -1,0 +1,36 @@
+name: verify
+on:
+  pull_request:
+    branches:
+      - '*'
+jobs:
+  show-prow-config-changes:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: install_go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.19
+
+    - name: checkout cert-manager/release
+      uses: actions/checkout@v3
+      with:
+        path: release
+
+    - name: checkout jetstack/testing
+      uses: actions/checkout@v3
+      with:
+        repository: jetstack/testing
+        path: testing
+
+    - name: Generate prow config and show changes
+      run: |
+        cd release && go install ./cmd/cmrel && cd -
+        cd testing/config/jobs/cert-manager/cert-manager
+        # Preserve hand-rolled bazel tests and READMEs
+        find . ! \( -name '*bazel*' -o -name '*.md' \) -type f -exec rm -rf {} +
+        # Delete empty directories
+        find . -empty -type d -delete
+        cmrel generate-prow  --branch '*' -o file
+        echo ">>> Please see the changes this PR will make to cert-manager prow config:"
+        git add . && git --no-pager diff HEAD
