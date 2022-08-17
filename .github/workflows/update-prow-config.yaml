@@ -21,21 +21,19 @@ jobs:
 
     - name: checkout cert-manager/release
       uses: actions/checkout@v3
-      with:
-        path: release
+
+    - name: build cmrel
+      run: |
+        go install ./cmd/cmrel
 
     - name: checkout jetstack/testing
       uses: actions/checkout@v3
       with:
         repository: jetstack/testing
-        path: testing
-
-    - run: cd testing && git config --global --add safe.directory "$GITHUB_WORKSPACE" && cd -
 
     - name: generate prow config.
       run: |
-        cd release && go install ./cmd/cmrel && cd -
-        cd testing/config/jobs/cert-manager/cert-manager
+        cd config/jobs/cert-manager/cert-manager
         # Preserve hand-rolled bazel tests and READMEs
         find . ! \( -name '*bazel*' -o -name '*.md' \) -type f -exec rm -rf {} +
         # Delete empty directories
