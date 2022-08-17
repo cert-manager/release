@@ -173,14 +173,14 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 }
 
 // KnownBranches returns a list of all branches which have been configured here
-func KnownBranches() string {
+func KnownBranches() []string {
 	var availableBranches []string
 
 	for branch, _ := range knownBranches {
 		availableBranches = append(availableBranches, branch)
 	}
 
-	return strings.Join(availableBranches, ", ")
+	return availableBranches
 }
 
 // SpecForBranch returns a spec for the named branch, if it exists
