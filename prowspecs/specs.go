@@ -35,6 +35,9 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		prowContext: &prowgen.ProwContext{
 			Branch: "release-1.8",
 
+			// Freeze test images used.
+			Image: "eu.gcr.io/jetstack-build-infra-images/bazelbuild:20220512-b6ea825-4.2.1",
+
 			// NB: we don't use a presubmit dashboard outside of "master", currently
 			PresubmitDashboard: false,
 			PeriodicDashboard:  true,
@@ -56,6 +59,9 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		prowContext: &prowgen.ProwContext{
 			Branch: "release-1.9",
 
+			// Freeze test images used.
+			Image: "eu.gcr.io/jetstack-build-infra-images/bazelbuild:20220512-b6ea825-4.2.1",
+
 			// NB: we don't use a presubmit dashboard outside of "master", currently
 			PresubmitDashboard: false,
 			PeriodicDashboard:  true,
@@ -72,6 +78,9 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 	"master": BranchSpec{
 		prowContext: &prowgen.ProwContext{
 			Branch: "master",
+
+			// Use latest image.
+			Image: prowgen.CommonTestImage,
 
 			PresubmitDashboard: true,
 			PeriodicDashboard:  true,
@@ -109,54 +118,54 @@ type BranchSpec struct {
 // GenerateJobFile will create a complete test file based on the BranchSpec. This
 // assumes that all tests for all branches should be the same.
 func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
-	m.prowContext.RequiredPresubmit(prowgen.MakeTest())
-	m.prowContext.RequiredPresubmit(prowgen.ChartTest())
+	m.prowContext.RequiredPresubmit(prowgen.MakeTest(m.prowContext))
+	m.prowContext.RequiredPresubmit(prowgen.ChartTest(m.prowContext))
 
 	for _, secondaryVersion := range m.otherKubernetesVersions {
-		m.prowContext.OptionalPresubmit(prowgen.E2ETest(secondaryVersion))
+		m.prowContext.OptionalPresubmit(prowgen.E2ETest(m.prowContext, secondaryVersion))
 	}
 
-	m.prowContext.RequiredPresubmit(prowgen.E2ETest(m.primaryKubernetesVersion))
+	m.prowContext.RequiredPresubmit(prowgen.E2ETest(m.prowContext, m.primaryKubernetesVersion))
 
 	if !m.skipUpgradeTest {
 		// TODO: 1.8 is the last version which doesn't support make-based upgrade tests. This can be
 		// done unconditionally when 1.8 is deprecated.
-		m.prowContext.RequiredPresubmit(prowgen.UpgradeTest(m.primaryKubernetesVersion))
+		m.prowContext.RequiredPresubmit(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion))
 	}
 
-	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiTPP(m.primaryKubernetesVersion))
-	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiCloud(m.primaryKubernetesVersion))
-	m.prowContext.OptionalPresubmit(prowgen.E2ETestFeatureGatesDisabled(m.primaryKubernetesVersion))
+	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiTPP(m.prowContext, m.primaryKubernetesVersion))
+	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiCloud(m.prowContext, m.primaryKubernetesVersion))
+	m.prowContext.OptionalPresubmit(prowgen.E2ETestFeatureGatesDisabled(m.prowContext, m.primaryKubernetesVersion))
 
 	allKubernetesVersions := append(m.otherKubernetesVersions, m.primaryKubernetesVersion)
 
-	m.prowContext.Periodics(prowgen.MakeTest(), 2)
+	m.prowContext.Periodics(prowgen.MakeTest(m.prowContext), 2)
 
 	// TODO: add chart periodic test?
 
 	for _, kubernetesVersion := range allKubernetesVersions {
-		m.prowContext.Periodics(prowgen.E2ETest(kubernetesVersion), 2)
+		m.prowContext.Periodics(prowgen.E2ETest(m.prowContext, kubernetesVersion), 2)
 
 	}
 
-	m.prowContext.Periodics(prowgen.E2ETestVenafiBoth(m.primaryKubernetesVersion), 12)
+	m.prowContext.Periodics(prowgen.E2ETestVenafiBoth(m.prowContext, m.primaryKubernetesVersion), 12)
 
 	if !m.skipUpgradeTest {
 		// TODO: 1.8 is the last version which doesn't support make-based upgrade tests. This can be
 		// done unconditionally when 1.8 is deprecated.
-		m.prowContext.Periodics(prowgen.UpgradeTest(m.primaryKubernetesVersion), 8)
+		m.prowContext.Periodics(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion), 8)
 	}
 
 	for _, kubernetesVersion := range allKubernetesVersions {
 		// TODO: roll this into above for loop; we have two for loops here to preserve the
 		// ordering of the tests in the output file, making it easier to review the
 		// differences between generated tests and existing handwritten tests
-		m.prowContext.Periodics(prowgen.E2ETestFeatureGatesDisabled(kubernetesVersion), 24)
+		m.prowContext.Periodics(prowgen.E2ETestFeatureGatesDisabled(m.prowContext, kubernetesVersion), 24)
 	}
 
 	if !m.skipTrivy {
 		for _, container := range []string{"controller", "acmesolver", "ctl", "cainjector", "webhook"} {
-			m.prowContext.Periodics(prowgen.TrivyTest(container), 24)
+			m.prowContext.Periodics(prowgen.TrivyTest(m.prowContext, container), 24)
 		}
 	}
 

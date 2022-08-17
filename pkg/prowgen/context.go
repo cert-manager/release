@@ -31,6 +31,9 @@ type ProwContext struct {
 	// dashboard for each supported release channel.
 	Branch string
 
+	// Image is the common test image used for running prow jobs.
+	Image string
+
 	// PresubmitDashboard, if set, will generate a presubmit dashboard name based on the branch name
 	// for each presubmit job. If false, no presubmits will be added to a dashboard.
 	PresubmitDashboard bool

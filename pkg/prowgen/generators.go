@@ -23,7 +23,7 @@ import (
 
 // MakeTest generates a test which runs linting and verification targets as well as
 // unit and integration tests
-func MakeTest() *Job {
+func MakeTest(ctx *ProwContext) *Job {
 	job := jobTemplate(
 		"make-test",
 		"Runs unit and integration tests and verification scripts",
@@ -36,7 +36,7 @@ func MakeTest() *Job {
 
 	job.Spec.Containers = []Container{
 		{
-			Image: CommonTestImage,
+			Image: ctx.Image,
 			Args: []string{
 				"runner",
 				"make",
@@ -59,7 +59,7 @@ func MakeTest() *Job {
 
 // ChartTest generates a test which lints helm charts. This is run inside a container
 // and so requires additional permissions.
-func ChartTest() *Job {
+func ChartTest(ctx *ProwContext) *Job {
 	job := jobTemplate(
 		"chart",
 		"Verifies the Helm chart passes linting checks",
@@ -71,7 +71,7 @@ func ChartTest() *Job {
 
 	job.Spec.Containers = []Container{
 		{
-			Image: CommonTestImage,
+			Image: ctx.Image,
 			Args: []string{
 				"runner",
 				"make",
@@ -95,7 +95,7 @@ func ChartTest() *Job {
 
 // E2ETest generates a test which runs end-to-end tests with feature gates enabled. This
 // is run inside a container and requires additional permissions.
-func E2ETest(k8sVersion string) *Job {
+func E2ETest(ctx *ProwContext, k8sVersion string) *Job {
 	// we don't want to use dots in names, so replace with dashes
 	nameVersion := strings.ReplaceAll(k8sVersion, ".", "-")
 
@@ -119,7 +119,7 @@ func E2ETest(k8sVersion string) *Job {
 
 	job.Spec.Containers = []Container{
 		{
-			Image: CommonTestImage,
+			Image: ctx.Image,
 			Args: []string{
 				"runner",
 				"make",
@@ -148,8 +148,8 @@ func E2ETest(k8sVersion string) *Job {
 
 // E2ETestVenafiTPP generates a test which runs end-to-end tests only focusing on Venafi TPP.
 // This runs inside a container and so requires additional permissions.
-func E2ETestVenafiTPP(k8sVersion string) *Job {
-	job := E2ETest(k8sVersion)
+func E2ETestVenafiTPP(ctx *ProwContext, k8sVersion string) *Job {
+	job := E2ETest(ctx, k8sVersion)
 
 	job.Name = job.Name + "-issuers-venafi-tpp"
 	job.Annotations["description"] = "Runs the E2E tests with 'Venafi TPP' in name"
@@ -168,8 +168,8 @@ func E2ETestVenafiTPP(k8sVersion string) *Job {
 
 // E2ETestVenafiCloud generates a test which runs end-to-end tests only focusing on Venafi Cloud.
 // This runs inside a container and so requires additional permissions.
-func E2ETestVenafiCloud(k8sVersion string) *Job {
-	job := E2ETest(k8sVersion)
+func E2ETestVenafiCloud(ctx *ProwContext, k8sVersion string) *Job {
+	job := E2ETest(ctx, k8sVersion)
 
 	job.Name = job.Name + "-issuers-venafi-cloud"
 	job.Annotations["description"] = "Runs the E2E tests with 'Venafi Cloud' in name"
@@ -189,8 +189,8 @@ func E2ETestVenafiCloud(k8sVersion string) *Job {
 // E2ETestVenafiBoth generates a test which runs end-to-end tests focusing on
 // both Venafi TPP and Venafi Cloud.
 // This runs inside a container and so requires additional permissions.
-func E2ETestVenafiBoth(k8sVersion string) *Job {
-	job := E2ETest(k8sVersion)
+func E2ETestVenafiBoth(ctx *ProwContext, k8sVersion string) *Job {
+	job := E2ETest(ctx, k8sVersion)
 
 	job.Name = job.Name + "-issuers-venafi"
 	job.Annotations["description"] = "Runs Venafi (VaaS and TPP) e2e tests"
@@ -208,8 +208,8 @@ func E2ETestVenafiBoth(k8sVersion string) *Job {
 }
 
 // E2ETestFeatureGatesDisabled generates a test which runs e2e tests with feature gates disabled
-func E2ETestFeatureGatesDisabled(k8sVersion string) *Job {
-	job := E2ETest(k8sVersion)
+func E2ETestFeatureGatesDisabled(ctx *ProwContext, k8sVersion string) *Job {
+	job := E2ETest(ctx, k8sVersion)
 
 	job.Name = job.Name + "-feature-gates-disabled"
 	job.Annotations["description"] = "Runs the E2E tests with all feature gates disabled"
@@ -231,7 +231,7 @@ func E2ETestFeatureGatesDisabled(k8sVersion string) *Job {
 // UpgradeTest generates a test which tests an upgrade from the latest released version
 // of cert-manager to the version specified by the test ref / branch. This test runs
 // inside a container and so requires additional privileges.
-func UpgradeTest(k8sVersion string) *Job {
+func UpgradeTest(ctx *ProwContext, k8sVersion string) *Job {
 	nameVersion := strings.ReplaceAll(k8sVersion, ".", "-")
 
 	job := jobTemplate(
@@ -248,7 +248,7 @@ func UpgradeTest(k8sVersion string) *Job {
 
 	job.Spec.Containers = []Container{
 		{
-			Image: CommonTestImage,
+			Image: ctx.Image,
 			Args: []string{
 				"runner",
 				"make",
@@ -279,7 +279,7 @@ func UpgradeTest(k8sVersion string) *Job {
 // so e.g. if there's a vuln in the "controller" container we might never scan "ctl" container.
 // Instead, we generate a test for each container so it's obvious which ones have failures and it's easier to get results
 // for each container
-func TrivyTest(containerName string) *Job {
+func TrivyTest(ctx *ProwContext, containerName string) *Job {
 	containerName = strings.ToLower(containerName)
 
 	job := jobTemplate(
@@ -295,7 +295,7 @@ func TrivyTest(containerName string) *Job {
 
 	job.Spec.Containers = []Container{
 		{
-			Image: CommonTestImage,
+			Image: ctx.Image,
 			Args: []string{
 				"runner",
 				"make",
