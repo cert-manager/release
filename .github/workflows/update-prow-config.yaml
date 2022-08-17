@@ -30,7 +30,9 @@ jobs:
         repository: jetstack/testing
         path: testing
 
-    - name: Generate prow config.
+    - run: cd testing && git config --global --add safe.directory "$GITHUB_WORKSPACE" && cd -
+
+    - name: generate prow config.
       run: |
         cd release && go install ./cmd/cmrel && cd -
         cd testing/config/jobs/cert-manager/cert-manager
@@ -39,10 +41,17 @@ jobs:
         # Delete empty directories
         find . -empty -type d -delete
         cmrel generate-prow  --branch '*' -o file
+        echo ">>> Creating a PR with the following changes:"
+        git add . && git --no-pager diff HEAD
 
     - name: create pull request if there are changes
       uses: peter-evans/create-pull-request@v4
       id: cpr
+      with:
+        delete-branch: true
+        signoff: true
+        title: "Update cert-manager/cert-manager prow config"
+        branch: "update-cert-manager-prow-config"
 
     - name: check outputs
       if: ${{ steps.cpr.outputs.pull-request-number }}
