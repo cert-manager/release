@@ -9,7 +9,7 @@ name: Update jetstack/testing with cert-manager/cert-manager prow test config.
 on:
   push:
     branches:
-      - master
+      - test-prow
 jobs:
   update-prow-config:
     runs-on: ubuntu-22.04
@@ -41,8 +41,6 @@ jobs:
         # Delete empty directories
         find . -empty -type d -delete
         cmrel generate-prow  --branch '*' -o file
-        echo ">>> Creating a PR with the following changes:"
-        git add . && git --no-pager diff HEAD
 
     - name: create pull request if there are changes
       uses: peter-evans/create-pull-request@v4
