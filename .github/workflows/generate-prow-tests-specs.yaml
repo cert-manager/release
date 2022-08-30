@@ -1,4 +1,4 @@
-name: verify
+name: generate-prow-tests-specs
 on:
   pull_request:
     branches:
@@ -32,5 +32,13 @@ jobs:
         # Delete empty directories
         find . -empty -type d -delete
         cmrel generate-prow  --branch '*' -o file
-        echo ">>> Please see the changes this PR will make to cert-manager prow config:"
+        echo ">>> Please see the changes this will make to the current cert-manager prow config:"
         git add . && git --no-pager diff HEAD
+        echo ">>> git patch available in workflow artifacts as 'prow-config.patch'"
+        mkdir -p ${{ github.workspace }}/artifact
+        git --no-pager diff --patch HEAD > ${{ github.workspace }}/artifact/prow-config.patch
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: prow-config.patch
+        path: ${{ github.workspace }}/artifact/prow-config.patch
