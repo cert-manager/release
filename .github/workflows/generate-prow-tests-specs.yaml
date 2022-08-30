@@ -1,4 +1,4 @@
-name: verify
+name: generate-prow-tests-specs
 on:
   pull_request:
     branches:
