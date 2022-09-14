@@ -52,8 +52,8 @@ func MakeTest(ctx *ProwContext) *Job {
 				},
 			},
 			Lifecycle: &Lifecycle{
-				PreStop: PreStop{
-					Exec: Exec{
+				PreStop: LifecycleHandler{
+					Exec: ExecAction{
 						Command: []string{
 							"/bin/sh",
 							"-c",
