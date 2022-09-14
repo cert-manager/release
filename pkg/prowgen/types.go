@@ -100,14 +100,14 @@ type SecurityContextCapabilities struct {
 }
 
 type Lifecycle struct {
-	PreStop PreStop `yaml:"preStop"`
+	PreStop LifecycleHandler `yaml:"preStop"`
 }
 
-type PreStop struct {
-	Exec Exec `yaml:"exec"`
+type LifecycleHandler struct {
+	Exec ExecAction `yaml:"exec"`
 }
 
-type Exec struct {
+type ExecAction struct {
 	Command []string `yaml:"command"`
 }
 
