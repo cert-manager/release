@@ -51,6 +51,17 @@ func MakeTest(ctx *ProwContext) *Job {
 					Memory: "4Gi",
 				},
 			},
+			Lifecycle: &Lifecycle{
+				PreStop: LifecycleHandler{
+					Exec: ExecAction{
+						Command: []string{
+							"/bin/sh",
+							"-c",
+							"make kind-logs",
+						},
+					},
+				},
+			},
 		},
 	}
 
