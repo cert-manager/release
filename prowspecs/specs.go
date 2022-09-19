@@ -31,7 +31,7 @@ import (
 // based on the k8s version it's being run against.
 
 var knownBranches map[string]BranchSpec = map[string]BranchSpec{
-	"release-1.8": BranchSpec{
+	"release-1.8": {
 		prowContext: &prowgen.ProwContext{
 			Branch: "release-1.8",
 
@@ -46,8 +46,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 			Repo: "cert-manager",
 		},
 
-		primaryKubernetesVersion: "1.24",
-		otherKubernetesVersions:  []string{"1.19", "1.20", "1.21", "1.22", "1.23"},
+		primaryKubernetesVersion: "1.25",
+		otherKubernetesVersions:  []string{"1.19", "1.20", "1.21", "1.22", "1.23", "1.24"},
 
 		// see comment for BranchSpec.skipUpgradeTest
 		// Once release-1.8 is deprecated, skipUpgradeTest can be removed entirely
@@ -55,7 +55,7 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 
 		skipTrivy: true,
 	},
-	"release-1.9": BranchSpec{
+	"release-1.9": {
 		prowContext: &prowgen.ProwContext{
 			Branch: "release-1.9",
 
@@ -70,12 +70,12 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 			Repo: "cert-manager",
 		},
 
-		primaryKubernetesVersion: "1.24",
-		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
+		primaryKubernetesVersion: "1.25",
+		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24"},
 
 		skipTrivy: true,
 	},
-	"master": BranchSpec{
+	"master": {
 		prowContext: &prowgen.ProwContext{
 			Branch: "master",
 
@@ -89,8 +89,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 			Repo: "cert-manager",
 		},
 
-		primaryKubernetesVersion: "1.24",
-		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
+		primaryKubernetesVersion: "1.25",
+		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24"},
 	},
 }
 
