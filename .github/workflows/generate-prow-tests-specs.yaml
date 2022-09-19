@@ -1,5 +1,7 @@
 name: generate-prow-tests-specs
 on:
+  push:
+    branches: [main]
   pull_request:
     branches:
       - '*'
