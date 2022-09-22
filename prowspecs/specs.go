@@ -46,8 +46,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 			Repo: "cert-manager",
 		},
 
-		primaryKubernetesVersion: "1.25",
-		otherKubernetesVersions:  []string{"1.19", "1.20", "1.21", "1.22", "1.23", "1.24"},
+		primaryKubernetesVersion: "1.24",
+		otherKubernetesVersions:  []string{"1.19", "1.20", "1.21", "1.22", "1.23", "1.25"},
 
 		// see comment for BranchSpec.skipUpgradeTest
 		// Once release-1.8 is deprecated, skipUpgradeTest can be removed entirely
@@ -70,8 +70,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 			Repo: "cert-manager",
 		},
 
-		primaryKubernetesVersion: "1.25",
-		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24"},
+		primaryKubernetesVersion: "1.24",
+		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.25"},
 
 		skipTrivy: true,
 	},
@@ -89,8 +89,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 			Repo: "cert-manager",
 		},
 
-		primaryKubernetesVersion: "1.25",
-		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24"},
+		primaryKubernetesVersion: "1.24",
+		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.25"},
 	},
 }
 
