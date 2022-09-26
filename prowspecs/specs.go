@@ -47,7 +47,7 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		},
 
 		primaryKubernetesVersion: "1.24",
-		otherKubernetesVersions:  []string{"1.19", "1.20", "1.21", "1.22", "1.23", "1.25"},
+		otherKubernetesVersions:  []string{"1.19", "1.20", "1.21", "1.22", "1.23"},
 
 		// see comment for BranchSpec.skipUpgradeTest
 		// Once release-1.8 is deprecated, skipUpgradeTest can be removed entirely
@@ -71,7 +71,7 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		},
 
 		primaryKubernetesVersion: "1.24",
-		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.25"},
+		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
 
 		skipTrivy: true,
 	},
