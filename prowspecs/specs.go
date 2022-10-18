@@ -31,30 +31,6 @@ import (
 // based on the k8s version it's being run against.
 
 var knownBranches map[string]BranchSpec = map[string]BranchSpec{
-	"release-1.8": {
-		prowContext: &prowgen.ProwContext{
-			Branch: "release-1.8",
-
-			// Freeze test images used.
-			Image: "eu.gcr.io/jetstack-build-infra-images/bazelbuild:20220512-b6ea825-4.2.1",
-
-			// NB: we don't use a presubmit dashboard outside of "master", currently
-			PresubmitDashboard: false,
-			PeriodicDashboard:  true,
-
-			Org:  "cert-manager",
-			Repo: "cert-manager",
-		},
-
-		primaryKubernetesVersion: "1.24",
-		otherKubernetesVersions:  []string{"1.19", "1.20", "1.21", "1.22", "1.23"},
-
-		// see comment for BranchSpec.skipUpgradeTest
-		// Once release-1.8 is deprecated, skipUpgradeTest can be removed entirely
-		skipUpgradeTest: true,
-
-		skipTrivy: true,
-	},
 	"release-1.9": {
 		prowContext: &prowgen.ProwContext{
 			Branch: "release-1.9",
