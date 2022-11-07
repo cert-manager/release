@@ -320,6 +320,9 @@ func TrivyTest(ctx *ProwContext, containerName string) *Job {
 					Memory: "2Gi",
 				},
 			},
+			SecurityContext: &SecurityContext{
+				Privileged: true,
+			},
 		},
 	}
 

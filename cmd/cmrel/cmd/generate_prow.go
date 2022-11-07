@@ -47,7 +47,8 @@ By generating this config we avoid the need for humans to edit YAML manually
 which is error-prone.
 
 If --output-format is set to "file", the generated YAML will be written to the
-file with the correct directory format prow expects.
+file with the correct directory format which prow expects. Otherwise, generated
+output will be written to stdout.
 `
 )
 
@@ -70,7 +71,7 @@ type generateProwOptions struct {
 
 func (o *generateProwOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Branch, "branch", "", fmt.Sprintf("Type of tests to generate; one of ('*' generates all branches) %v", append(prowspecs.KnownBranches(), "*")))
-	fs.StringVarP(&o.OutputFormat, "output-format", "o", "stdout", "Output format; one of 'stdout' or 'file'")
+	fs.StringVarP(&o.OutputFormat, "output-format", "o", "stdout", "Output format; one of 'stdout' or 'file'. Any other option prints to stdout.")
 
 	markRequired("branch")
 }
@@ -135,9 +136,7 @@ func (o *generateProwOptions) runGenerateProw(branch string) error {
 
 	data := prelude + string(out)
 
-	switch o.OutputFormat {
-	case "stdout":
-		fmt.Println(data)
+	switch strings.ToLower(o.OutputFormat) {
 	case "file":
 		if err := os.MkdirAll(branch, 0755); err != nil {
 			return err
@@ -152,6 +151,9 @@ func (o *generateProwOptions) runGenerateProw(branch string) error {
 		if _, err := io.Copy(f, strings.NewReader(data)); err != nil {
 			return err
 		}
+
+	default:
+		fmt.Println(data)
 	}
 
 	return nil
