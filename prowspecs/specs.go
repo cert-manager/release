@@ -69,7 +69,7 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		primaryKubernetesVersion: "1.25",
 		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24"},
 
-		skipTrivy: true,
+		skipTrivy: false,
 	},
 	"master": {
 		prowContext: &prowgen.ProwContext{
@@ -87,6 +87,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 
 		primaryKubernetesVersion: "1.25",
 		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24"},
+
+		skipTrivy: false,
 	},
 }
 
