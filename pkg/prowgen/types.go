@@ -118,6 +118,8 @@ type PresubmitJob struct {
 
 	AlwaysRun bool `yaml:"always_run"`
 	Optional  bool `yaml:"optional"`
+
+	RunIfChanged string `yaml:"run_if_changed,omitempty"`
 }
 
 type PeriodicJob struct {
