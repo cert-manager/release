@@ -93,6 +93,40 @@ func ChartTest(ctx *ProwContext) *Job {
 	return job
 }
 
+// LicenseTest generates a test which validates the LICENSES file. Since the verify-licenses make target
+// depends on external services for license checking, running it on every PR would introduce the possibilities
+// for flakes if, say, a vanity import site such as gopkg.in was down.
+// We special case the license test so it only runs when go.mod has changed.
+func LicenseTest(ctx *ProwContext) *Job {
+	job := jobTemplate(
+		"license",
+		"Verifies LICENSES are up to date; only needs to be run if go.mod has changed",
+		addServiceAccountLabel,
+		addMakeVolumesLabel,
+		addMaxConcurrency(8),
+	)
+
+	job.Spec.Containers = []Container{
+		{
+			Image: ctx.Image,
+			Args: []string{
+				"runner",
+				"make",
+				"vendor-go",
+				"verify-licenses",
+			},
+			Resources: ContainerResources{
+				Requests: ContainerResourceRequest{
+					CPU:    "1",
+					Memory: "1Gi",
+				},
+			},
+		},
+	}
+
+	return job
+}
+
 // E2ETest generates a test which runs end-to-end tests with feature gates enabled. This
 // is run inside a container and requires additional permissions.
 func E2ETest(ctx *ProwContext, k8sVersion string) *Job {

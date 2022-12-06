@@ -131,6 +131,8 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 		m.prowContext.RequiredPresubmit(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion))
 	}
 
+	m.prowContext.OptionalPresubmitIfChanged(prowgen.LicenseTest(m.prowContext), `go.mod`)
+
 	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiTPP(m.prowContext, m.primaryKubernetesVersion))
 	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiCloud(m.prowContext, m.primaryKubernetesVersion))
 	m.prowContext.OptionalPresubmit(prowgen.E2ETestFeatureGatesDisabled(m.prowContext, m.primaryKubernetesVersion))

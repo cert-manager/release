@@ -56,22 +56,29 @@ type ProwContext struct {
 
 // RequiredPresubmit adds a presubmit which is run by default and required to pass before a PR can be merged
 func (pc *ProwContext) RequiredPresubmit(job *Job) {
-	pc.addPresubmit(job, true, false)
+	pc.addPresubmit(job, true, false, "")
 }
 
 // RequiredPresubmits adds a list of jobs to the context
 func (pc *ProwContext) RequiredPresubmits(jobs []*Job) {
 	for _, job := range jobs {
-		pc.addPresubmit(job, true, false)
+		pc.addPresubmit(job, true, false, "")
 	}
 }
 
-// RequiredPresubmit adds a presubmit which is not run by default and is optional
+// OptionalPresubmit adds a presubmit which is not run by default and is optional
 func (pc *ProwContext) OptionalPresubmit(job *Job) {
-	pc.addPresubmit(job, false, true)
+	pc.addPresubmit(job, false, true, "")
 }
 
-func (pc *ProwContext) addPresubmit(job *Job, alwaysRun bool, optional bool) {
+// OptionalPresubmitIfChanged adds a presubmit which is not run by default and is optional unless a file has been
+// changed which matches changedFileRegex. In that situation, the job is always run.
+// See https://docs.prow.k8s.io/docs/jobs/#triggering-jobs-based-on-changes
+func (pc *ProwContext) OptionalPresubmitIfChanged(job *Job, changedFileRegex string) {
+	pc.addPresubmit(job, false, true, changedFileRegex)
+}
+
+func (pc *ProwContext) addPresubmit(job *Job, alwaysRun bool, optional bool, changedFileRegex string) {
 	job.Name = pc.presubmitJobName(job.Name)
 
 	if pc.PresubmitDashboard {
@@ -81,9 +88,10 @@ func (pc *ProwContext) addPresubmit(job *Job, alwaysRun bool, optional bool) {
 	pc.presubmits = append(pc.presubmits, &PresubmitJob{
 		Job: *job,
 		// see the comment on ProwContext.Branch for why we only support a single branch here
-		Branches:  []string{pc.Branch},
-		AlwaysRun: alwaysRun,
-		Optional:  optional,
+		Branches:     []string{pc.Branch},
+		AlwaysRun:    alwaysRun,
+		Optional:     optional,
+		RunIfChanged: changedFileRegex,
 	})
 }
 
