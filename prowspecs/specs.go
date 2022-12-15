@@ -108,12 +108,6 @@ type BranchSpec struct {
 	primaryKubernetesVersion string
 	otherKubernetesVersions  []string
 
-	// skipUpgradeTest if set will cause the upgrade test to not be added to periodics or presubmits.
-	// This is because the test is manually specified using bazel for release-1.8, and the test isn't implemented
-	// in make. Efforts to backport things like tests have proven difficult, so let's make the change here
-	// rather than trying to backport the upgrade test.
-	skipUpgradeTest bool
-
 	// skipTrivy skips generating tests relating to vulnerability scanning since this wasn't backported.
 	skipTrivy bool
 }
@@ -130,11 +124,7 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 
 	m.prowContext.RequiredPresubmit(prowgen.E2ETest(m.prowContext, m.primaryKubernetesVersion))
 
-	if !m.skipUpgradeTest {
-		// TODO: 1.8 is the last version which doesn't support make-based upgrade tests. This can be
-		// done unconditionally when 1.8 is deprecated.
-		m.prowContext.RequiredPresubmit(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion))
-	}
+	m.prowContext.RequiredPresubmit(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion))
 
 	m.prowContext.OptionalPresubmitIfChanged(prowgen.LicenseTest(m.prowContext), `go.mod`)
 
@@ -155,11 +145,7 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 
 	m.prowContext.Periodics(prowgen.E2ETestVenafiBoth(m.prowContext, m.primaryKubernetesVersion), 12)
 
-	if !m.skipUpgradeTest {
-		// TODO: 1.8 is the last version which doesn't support make-based upgrade tests. This can be
-		// done unconditionally when 1.8 is deprecated.
-		m.prowContext.Periodics(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion), 8)
-	}
+	m.prowContext.Periodics(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion), 8)
 
 	for _, kubernetesVersion := range allKubernetesVersions {
 		// TODO: roll this into above for loop; we have two for loops here to preserve the
