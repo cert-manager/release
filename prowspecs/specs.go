@@ -67,7 +67,7 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		},
 
 		primaryKubernetesVersion: "1.25",
-		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24"},
+		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24", "1.26"},
 
 		skipTrivy: false,
 	},
@@ -85,8 +85,13 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 			Repo: "cert-manager",
 		},
 
+		// TODO: After support for k8s 1.26 merges in the cert-manager repo, change primary k8s version to 1.26 and add
+		// 1.25 to the otherKubernetesVersions
+
+		// TODO: After the release of cert-manager 1.11, remove k8s 1.21 as it won't be supported for cert-manager 1.11
+		// See: https://cert-manager.io/docs/installation/supported-releases/
 		primaryKubernetesVersion: "1.25",
-		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24"},
+		otherKubernetesVersions:  []string{"1.21", "1.22", "1.23", "1.24", "1.26"},
 
 		skipTrivy: false,
 	},
@@ -102,12 +107,6 @@ type BranchSpec struct {
 
 	primaryKubernetesVersion string
 	otherKubernetesVersions  []string
-
-	// skipUpgradeTest if set will cause the upgrade test to not be added to periodics or presubmits.
-	// This is because the test is manually specified using bazel for release-1.8, and the test isn't implemented
-	// in make. Efforts to backport things like tests have proven difficult, so let's make the change here
-	// rather than trying to backport the upgrade test.
-	skipUpgradeTest bool
 
 	// skipTrivy skips generating tests relating to vulnerability scanning since this wasn't backported.
 	skipTrivy bool
@@ -125,11 +124,7 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 
 	m.prowContext.RequiredPresubmit(prowgen.E2ETest(m.prowContext, m.primaryKubernetesVersion))
 
-	if !m.skipUpgradeTest {
-		// TODO: 1.8 is the last version which doesn't support make-based upgrade tests. This can be
-		// done unconditionally when 1.8 is deprecated.
-		m.prowContext.RequiredPresubmit(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion))
-	}
+	m.prowContext.RequiredPresubmit(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion))
 
 	m.prowContext.OptionalPresubmitIfChanged(prowgen.LicenseTest(m.prowContext), `go.mod`)
 
@@ -150,11 +145,7 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 
 	m.prowContext.Periodics(prowgen.E2ETestVenafiBoth(m.prowContext, m.primaryKubernetesVersion), 12)
 
-	if !m.skipUpgradeTest {
-		// TODO: 1.8 is the last version which doesn't support make-based upgrade tests. This can be
-		// done unconditionally when 1.8 is deprecated.
-		m.prowContext.Periodics(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion), 8)
-	}
+	m.prowContext.Periodics(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion), 8)
 
 	for _, kubernetesVersion := range allKubernetesVersions {
 		// TODO: roll this into above for loop; we have two for loops here to preserve the
