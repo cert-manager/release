@@ -85,13 +85,10 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 			Repo: "cert-manager",
 		},
 
-		// TODO: After support for k8s 1.26 merges in the cert-manager repo, change primary k8s version to 1.26 and add
-		// 1.25 to the otherKubernetesVersions
-
 		// TODO: After the release of cert-manager 1.11, remove k8s 1.21 as it won't be supported for cert-manager 1.11
 		// See: https://cert-manager.io/docs/installation/supported-releases/
-		primaryKubernetesVersion: "1.25",
-		otherKubernetesVersions:  []string{"1.21", "1.22", "1.23", "1.24", "1.26"},
+		primaryKubernetesVersion: "1.26",
+		otherKubernetesVersions:  []string{"1.21", "1.22", "1.23", "1.24", "1.25"},
 
 		skipTrivy: false,
 	},
