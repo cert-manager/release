@@ -71,6 +71,26 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 
 		skipTrivy: false,
 	},
+	"release-1.11": {
+		prowContext: &prowgen.ProwContext{
+			Branch: "release-1.11",
+
+			// Freeze test images used.
+			Image: "eu.gcr.io/jetstack-build-infra-images/bazelbuild:20220830-c65cd19-4.2.1",
+
+			// NB: we don't use a presubmit dashboard outside of "master", currently
+			PresubmitDashboard: false,
+			PeriodicDashboard:  true,
+
+			Org:  "cert-manager",
+			Repo: "cert-manager",
+		},
+
+		primaryKubernetesVersion: "1.26",
+		otherKubernetesVersions:  []string{"1.21", "1.22", "1.23", "1.24", "1.25"},
+
+		skipTrivy: false,
+	},
 	"master": {
 		prowContext: &prowgen.ProwContext{
 			Branch: "master",
