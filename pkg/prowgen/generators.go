@@ -334,6 +334,12 @@ func TrivyTest(ctx *ProwContext, containerName string) *Job {
 		addMakeVolumesLabel,
 		addDindLabel,
 		addMaxConcurrency(2),
+		// Need to ensure that trivy tests send a failure email as soon as they fail since
+		// they tend to be run relatively infrequently and a failure is important to address
+		addTestGridCustomFailuresToAlert(1),
+		// Ask TestGrid to alert us if the job hasn't run in the last 36 hours. Sets
+		// an upper limit on how regularly the job can be scheduled.
+		addTestGridStaleResultsAlert(36),
 	)
 
 	makeJobs, cpuRequest := calculateMakeConcurrency("1000m")
