@@ -16,6 +16,8 @@ limitations under the License.
 
 package prowgen
 
+import "fmt"
+
 type JobConfigurer func(*Job)
 
 // jobTemplate defines a 'default' job, where standard parameters can be set. All jobs
@@ -116,11 +118,30 @@ func addStandardE2ELabels(kubernetesVersion string) JobConfigurer {
 	}
 }
 
+// addTestGridAnnotations inserts standard testgrid annotations for the job.
+// For a list of testgrid annotations, see:
+// https://github.com/GoogleCloudPlatform/testgrid/blob/444774c4b660dad5ab3c1f47e0579d37deb6b5b0/config.md#prow-job-configuration
 func addTestGridAnnotations(dashboardName string) JobConfigurer {
 	return func(job *Job) {
 		job.Annotations["testgrid-create-job-group"] = "true"
 		job.Annotations["testgrid-dashboards"] = dashboardName
 		job.Annotations["testgrid-alert-email"] = AlertEmailAddress
+	}
+}
+
+// addTestGridCustomFailuresToAlert changes the number of failures required before TestGrid
+// marks a job as "failed" (rather thank "flaky")
+func addTestGridCustomFailuresToAlert(failuresToAlert int) JobConfigurer {
+	return func(job *Job) {
+		job.Annotations["testgrid-num-failures-to-alert"] = fmt.Sprintf("%d", failuresToAlert)
+	}
+}
+
+// addTestGridStaleResultsAlert sets, in hours, the length of time before a job should be
+// considered stale. This guards against a job not running for whatever reason.
+func addTestGridStaleResultsAlert(hoursUntilStale int) JobConfigurer {
+	return func(job *Job) {
+		job.Annotations["testgrid-alert-stale-results-hours"] = fmt.Sprintf("%d", hoursUntilStale)
 	}
 }
 

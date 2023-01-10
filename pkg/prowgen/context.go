@@ -34,12 +34,12 @@ type ProwContext struct {
 	// Image is the common test image used for running prow jobs.
 	Image string
 
-	// PresubmitDashboard, if set, will generate a presubmit dashboard name based on the branch name
-	// for each presubmit job. If false, no presubmits will be added to a dashboard.
+	// PresubmitDashboard, if set, will generate a presubmit TestGrid dashboard name based on the branch name
+	// for each presubmit job. If false, no presubmits will be added to a TestGrid dashboard.
 	PresubmitDashboard bool
 
-	// PeriodicDashboard, if set, will generate a periodic dashboard name based on the branch name
-	// for each periodic job. If false, no periodics will be added to a dashboard.
+	// PeriodicDashboard, if set, will generate a periodic TestGrid dashboard name based on the branch name
+	// for each periodic job. If false, no periodics will be added to a TestGrid dashboard.
 	PeriodicDashboard bool
 
 	// Org is the GitHub organisation of the repository under test.
