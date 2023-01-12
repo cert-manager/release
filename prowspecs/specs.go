@@ -31,26 +31,6 @@ import (
 // based on the k8s version it's being run against.
 
 var knownBranches map[string]BranchSpec = map[string]BranchSpec{
-	"release-1.9": {
-		prowContext: &prowgen.ProwContext{
-			Branch: "release-1.9",
-
-			// Freeze test images used.
-			Image: "eu.gcr.io/jetstack-build-infra-images/bazelbuild:20220512-b6ea825-4.2.1",
-
-			// NB: we don't use a presubmit dashboard outside of "master", currently
-			PresubmitDashboard: false,
-			PeriodicDashboard:  true,
-
-			Org:  "cert-manager",
-			Repo: "cert-manager",
-		},
-
-		primaryKubernetesVersion: "1.24",
-		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23"},
-
-		skipTrivy: true,
-	},
 	"release-1.10": {
 		prowContext: &prowgen.ProwContext{
 			Branch: "release-1.10",
@@ -68,8 +48,6 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 
 		primaryKubernetesVersion: "1.25",
 		otherKubernetesVersions:  []string{"1.20", "1.21", "1.22", "1.23", "1.24", "1.26"},
-
-		skipTrivy: false,
 	},
 	"release-1.11": {
 		prowContext: &prowgen.ProwContext{
@@ -88,8 +66,6 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 
 		primaryKubernetesVersion: "1.26",
 		otherKubernetesVersions:  []string{"1.21", "1.22", "1.23", "1.24", "1.25"},
-
-		skipTrivy: false,
 	},
 	"master": {
 		prowContext: &prowgen.ProwContext{
@@ -109,8 +85,6 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		// See: https://cert-manager.io/docs/installation/supported-releases/
 		primaryKubernetesVersion: "1.26",
 		otherKubernetesVersions:  []string{"1.21", "1.22", "1.23", "1.24", "1.25"},
-
-		skipTrivy: false,
 	},
 }
 
@@ -124,9 +98,6 @@ type BranchSpec struct {
 
 	primaryKubernetesVersion string
 	otherKubernetesVersions  []string
-
-	// skipTrivy skips generating tests relating to vulnerability scanning since this wasn't backported.
-	skipTrivy bool
 }
 
 // GenerateJobFile will create a complete test file based on the BranchSpec. This
@@ -171,10 +142,8 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 		m.prowContext.Periodics(prowgen.E2ETestFeatureGatesDisabled(m.prowContext, kubernetesVersion), 24)
 	}
 
-	if !m.skipTrivy {
-		for _, container := range []string{"controller", "acmesolver", "ctl", "cainjector", "webhook"} {
-			m.prowContext.Periodics(prowgen.TrivyTest(m.prowContext, container), 24)
-		}
+	for _, container := range []string{"controller", "acmesolver", "ctl", "cainjector", "webhook"} {
+		m.prowContext.Periodics(prowgen.TrivyTest(m.prowContext, container), 24)
 	}
 
 	return m.prowContext.JobFile()
