@@ -119,6 +119,7 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiTPP(m.prowContext, m.primaryKubernetesVersion))
 	m.prowContext.OptionalPresubmit(prowgen.E2ETestVenafiCloud(m.prowContext, m.primaryKubernetesVersion))
 	m.prowContext.OptionalPresubmit(prowgen.E2ETestFeatureGatesDisabled(m.prowContext, m.primaryKubernetesVersion))
+	m.prowContext.OptionalPresubmit(prowgen.E2ETestWithBestPracticeInstall(m.prowContext, m.primaryKubernetesVersion))
 
 	allKubernetesVersions := append(m.otherKubernetesVersions, m.primaryKubernetesVersion)
 
@@ -134,6 +135,8 @@ func (m *BranchSpec) GenerateJobFile() *prowgen.JobFile {
 	m.prowContext.Periodics(prowgen.E2ETestVenafiBoth(m.prowContext, m.primaryKubernetesVersion), 12)
 
 	m.prowContext.Periodics(prowgen.UpgradeTest(m.prowContext, m.primaryKubernetesVersion), 8)
+
+	m.prowContext.Periodics(prowgen.E2ETestWithBestPracticeInstall(m.prowContext, m.primaryKubernetesVersion), 24)
 
 	for _, kubernetesVersion := range allKubernetesVersions {
 		// TODO: roll this into above for loop; we have two for loops here to preserve the

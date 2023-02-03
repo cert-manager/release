@@ -94,6 +94,10 @@ func addVenafiCloudLabels(job *Job) {
 	job.Labels["preset-venafi-cloud-credentials"] = "true"
 }
 
+func addBestPracticeInstallLabel(job *Job) {
+	job.Labels["preset-bestpractice-install"] = "true"
+}
+
 func addStandardE2ELabels(kubernetesVersion string) JobConfigurer {
 	return func(job *Job) {
 		addDefaultE2EVolumeLabels(job)

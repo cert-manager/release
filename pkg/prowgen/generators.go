@@ -273,6 +273,30 @@ func E2ETestFeatureGatesDisabled(ctx *ProwContext, k8sVersion string) *Job {
 	return job
 }
 
+// E2ETestWithBestPracticeInstall generates a test which runs e2e tests
+// with cert-manager installed in accordance with
+// https://cert-manager.io/docs/installation/best-practice/
+func E2ETestWithBestPracticeInstall(ctx *ProwContext, k8sVersion string) *Job {
+	job := E2ETest(ctx, k8sVersion)
+
+	job.Name = job.Name + "-bestpractice-install"
+	job.Annotations["description"] = "Runs the E2E tests with cert-manager installed in accordance with https://cert-manager.io/docs/installation/best-practice/"
+
+	job.Labels = make(map[string]string)
+
+	addCloudflareCredentialsLabel(job)
+	addDefaultE2EVolumeLabels(job)
+	addDindLabel(job)
+	addDisableFeatureGatesLabel(job)
+	addGinkgoSkipDefaultLabel(job)
+	addMakeVolumesLabel(job)
+	addRetryFlakesLabel(job)
+	addServiceAccountLabel(job)
+	addBestPracticeInstallLabel(job)
+
+	return job
+}
+
 // UpgradeTest generates a test which tests an upgrade from the latest released version
 // of cert-manager to the version specified by the test ref / branch. This test runs
 // inside a container and so requires additional privileges.
