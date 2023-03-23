@@ -32,7 +32,7 @@ clean:
 	rm -rf ./bin ./cmrel
 
 .PHONY: test
-test:
+test: test-validate-gomod test-validate-gomod-success
 	@# TODO: this should be go test ./... but one of the tests was broken a while back and needs fixing first
 	go test ./cmd/cmrel/cmd/...
 	go test ./pkg/release
@@ -41,3 +41,11 @@ test:
 	@# go test ./pkg/release/validation  # this one is broken
 	go test ./pkg/sign
 	go test ./pkg/prowgen
+
+.PHONY: test-validate-gomod
+test-validate-gomod: bin/cmrel
+	./hack/test-validate-gomod.sh $<
+
+.PHONY: test-validate-gomod-success
+test-validate-gomod-success: bin/cmrel
+	./hack/test-validate-gomod-success.sh $<
