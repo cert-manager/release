@@ -18,7 +18,7 @@ package prowgen
 
 const (
 	// CommonTestImage defines the common base image used across many prow jobs
-	CommonTestImage = "eu.gcr.io/jetstack-build-infra-images/bazelbuild:20220830-c65cd19-4.2.1"
+	CommonTestImage = "eu.gcr.io/jetstack-build-infra-images/bazelbuild:20230323-d2dfab2-4.2.3"
 
 	// AlertEmailAddress is the address to which testgrid alerts should be sent
 	AlertEmailAddress = "cert-manager-dev-alerts@googlegroups.com"
