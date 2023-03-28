@@ -150,7 +150,7 @@ type internalModuleList struct {
 	replaceMap map[string]module.Version
 
 	// internalModuleNames is used for quickly answering the question "is this module name for an internal module". A map is used for O(1) lookup; the boolean is ignored
-	internalModuleNames map[string]bool
+	internalModuleNames map[string]struct{}
 }
 
 type internalModule struct {
@@ -172,7 +172,7 @@ type internalModule struct {
 func findInternalModules(root string) (*internalModuleList, error) {
 	var iml internalModuleList
 
-	iml.internalModuleNames = make(map[string]bool)
+	iml.internalModuleNames = make(map[string]struct{})
 
 	coreModulePath := filepath.Join(root, "go.mod")
 
@@ -213,7 +213,7 @@ func findInternalModules(root string) (*internalModuleList, error) {
 		}
 
 		iml.modules = append(iml.modules, &newMod)
-		iml.internalModuleNames[newMod.Name] = true
+		iml.internalModuleNames[newMod.Name] = struct{}{}
 
 		if path == coreModulePath {
 			iml.coreModule = &newMod
@@ -278,13 +278,12 @@ func (iml *internalModuleList) checkCoreModuleReplacements() error {
 
 // checkReplaces verifies that all internal modules have valid replace statements, meaning that:
 // - if a replace statement is for an internal module, it's using a filesystem replacement
-// - internal modules require a hardcoded dummy version
 // - if a replace statement is defined in the core module, then any submodules have the same replacement
 func (iml *internalModuleList) checkReplaces() []error {
 	var errs []error
 
 	for _, m := range iml.modules {
-		foundReplaces := make(map[string]bool)
+		foundReplaces := make(map[string]struct{})
 
 		for _, replaceStmt := range m.Module.Replace {
 			expectedReplace, exists := iml.replaceMap[replaceStmt.Old.Path]
@@ -293,7 +292,7 @@ func (iml *internalModuleList) checkReplaces() []error {
 				continue
 			}
 
-			foundReplaces[replaceStmt.Old.Path] = true
+			foundReplaces[replaceStmt.Old.Path] = struct{}{}
 
 			if replaceStmt.New.Path != expectedReplace.Path || replaceStmt.New.Version != expectedReplace.Version {
 				errs = append(errs, fmt.Errorf("module %q replaces %q with \"%s %s\", but the expected replacement was \"%s %s\". All replaces should match the core go.mod file and all internal modules should have local replacements", m.Name, replaceStmt.Old.Path, replaceStmt.New.Path, replaceStmt.New.Version, expectedReplace.Path, expectedReplace.Version))
