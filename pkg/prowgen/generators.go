@@ -165,7 +165,7 @@ func E2ETest(ctx *ProwContext, k8sVersion string) *Job {
 			Resources: ContainerResources{
 				Requests: ContainerResourceRequest{
 					CPU:    cpuRequest,
-					Memory: "12Gi",
+					Memory: "6Gi",
 				},
 			},
 			SecurityContext: &SecurityContext{
@@ -328,7 +328,7 @@ func UpgradeTest(ctx *ProwContext, k8sVersion string) *Job {
 			Resources: ContainerResources{
 				Requests: ContainerResourceRequest{
 					CPU:    "3500m",
-					Memory: "12Gi",
+					Memory: "6Gi",
 				},
 			},
 			SecurityContext: &SecurityContext{
