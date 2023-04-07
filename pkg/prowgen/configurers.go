@@ -44,8 +44,12 @@ func jobTemplate(name string, description string, configurers ...JobConfigurer) 
 	return job
 }
 
-func addMakeVolumesLabel(job *Job) {
-	job.Labels["preset-make-volumes"] = "true"
+func addLocalCacheLabel(job *Job) {
+	job.Labels["preset-local-cache"] = "true"
+}
+
+func addGoCacheLabel(job *Job) {
+	job.Labels["preset-go-cache"] = "true"
 }
 
 func addServiceAccountLabel(job *Job) {
@@ -62,10 +66,6 @@ func addCloudflareCredentialsLabel(job *Job) {
 
 func addRetryFlakesLabel(job *Job) {
 	job.Labels["preset-retry-flakey-jobs"] = "true"
-}
-
-func addDefaultE2EVolumeLabels(job *Job) {
-	job.Labels["preset-default-e2e-volumes"] = "true"
 }
 
 func addGinkgoSkipDefaultLabel(job *Job) {
@@ -99,7 +99,6 @@ func addBestPracticeInstallLabel(job *Job) {
 
 func addStandardE2ELabels(kubernetesVersion string) JobConfigurer {
 	return func(job *Job) {
-		addDefaultE2EVolumeLabels(job)
 		addGinkgoSkipDefaultLabel(job)
 
 		majorVersion, minorVersion, err := splitKubernetesVersion(kubernetesVersion)
