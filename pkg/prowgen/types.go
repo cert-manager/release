@@ -32,8 +32,6 @@ type Job struct {
 
 	MaxConcurrency int `yaml:"max_concurrency"`
 
-	Agent string `yaml:"agent"`
-
 	Decorate bool `yaml:"decorate"`
 
 	Annotations map[string]string `yaml:"annotations"`

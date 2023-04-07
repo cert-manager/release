@@ -27,7 +27,6 @@ type JobConfigurer func(*Job)
 func jobTemplate(name string, description string, configurers ...JobConfigurer) *Job {
 	job := &Job{
 		Name:     name,
-		Agent:    "kubernetes",
 		Decorate: true,
 		Annotations: map[string]string{
 			"description": description,
