@@ -35,8 +35,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		prowContext: &prowgen.ProwContext{
 			Branch: "release-1.10",
 
-			// Freeze test images used.
-			Image: "eu.gcr.io/jetstack-build-infra-images/make-dind:20230406-0ef4440-bullseye",
+			// Use latest image.
+			Image: prowgen.CommonTestImage,
 
 			// NB: we don't use a presubmit dashboard outside of "master", currently
 			PresubmitDashboard: false,
@@ -53,8 +53,8 @@ var knownBranches map[string]BranchSpec = map[string]BranchSpec{
 		prowContext: &prowgen.ProwContext{
 			Branch: "release-1.11",
 
-			// Freeze test images used.
-			Image: "eu.gcr.io/jetstack-build-infra-images/make-dind:20230406-0ef4440-bullseye",
+			// Use latest image.
+			Image: prowgen.CommonTestImage,
 
 			// NB: we don't use a presubmit dashboard outside of "master", currently
 			PresubmitDashboard: false,
