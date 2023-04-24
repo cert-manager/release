@@ -151,7 +151,7 @@ func E2ETest(ctx *ProwContext, k8sVersion string) *Job {
 		addMaxConcurrency(4),
 	)
 
-	makeJobs, cpuRequest := calculateMakeConcurrency("3500m")
+	makeJobs, cpuRequest := calculateMakeConcurrency("7000m")
 
 	k8sVersionArg := fmt.Sprintf("K8S_VERSION=%s", k8sVersion)
 
