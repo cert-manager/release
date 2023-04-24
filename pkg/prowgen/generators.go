@@ -28,7 +28,8 @@ func MakeTest(ctx *ProwContext) *Job {
 		"make-test",
 		"Runs unit and integration tests and verification scripts",
 		addServiceAccountLabel,
-		addMakeVolumesLabel,
+		addLocalCacheLabel,
+		addGoCacheLabel,
 		addMaxConcurrency(8),
 	)
 
@@ -65,7 +66,8 @@ func ChartTest(ctx *ProwContext) *Job {
 		"Verifies the Helm chart passes linting checks",
 		addServiceAccountLabel,
 		addDindLabel,
-		addMakeVolumesLabel,
+		addLocalCacheLabel,
+		addGoCacheLabel,
 		addMaxConcurrency(8),
 	)
 
@@ -102,7 +104,8 @@ func LicenseTest(ctx *ProwContext) *Job {
 		"license",
 		"Verifies LICENSES are up to date; only needs to be run if go.mod has changed",
 		addServiceAccountLabel,
-		addMakeVolumesLabel,
+		addLocalCacheLabel,
+		addGoCacheLabel,
 		addMaxConcurrency(8),
 	)
 
@@ -141,13 +144,14 @@ func E2ETest(ctx *ProwContext, k8sVersion string) *Job {
 		addServiceAccountLabel,
 		addDindLabel,
 		addCloudflareCredentialsLabel,
-		addMakeVolumesLabel,
+		addLocalCacheLabel,
+		addGoCacheLabel,
 		addStandardE2ELabels(k8sVersion),
 		addRetryFlakesLabel,
 		addMaxConcurrency(4),
 	)
 
-	makeJobs, cpuRequest := calculateMakeConcurrency("3500m")
+	makeJobs, cpuRequest := calculateMakeConcurrency("7000m")
 
 	k8sVersionArg := fmt.Sprintf("K8S_VERSION=%s", k8sVersion)
 
@@ -165,7 +169,7 @@ func E2ETest(ctx *ProwContext, k8sVersion string) *Job {
 			Resources: ContainerResources{
 				Requests: ContainerResourceRequest{
 					CPU:    cpuRequest,
-					Memory: "12Gi",
+					Memory: "6Gi",
 				},
 			},
 			SecurityContext: &SecurityContext{
@@ -201,9 +205,9 @@ func E2ETestVenafiTPP(ctx *ProwContext, k8sVersion string) *Job {
 
 	job.Labels = make(map[string]string)
 
-	addDefaultE2EVolumeLabels(job)
 	addDindLabel(job)
-	addMakeVolumesLabel(job)
+	addLocalCacheLabel(job)
+	addGoCacheLabel(job)
 	addRetryFlakesLabel(job)
 	addServiceAccountLabel(job)
 	addVenafiTPPLabels(job)
@@ -221,9 +225,9 @@ func E2ETestVenafiCloud(ctx *ProwContext, k8sVersion string) *Job {
 
 	job.Labels = make(map[string]string)
 
-	addDefaultE2EVolumeLabels(job)
 	addDindLabel(job)
-	addMakeVolumesLabel(job)
+	addLocalCacheLabel(job)
+	addGoCacheLabel(job)
 	addRetryFlakesLabel(job)
 	addServiceAccountLabel(job)
 	addVenafiCloudLabels(job)
@@ -242,9 +246,9 @@ func E2ETestVenafiBoth(ctx *ProwContext, k8sVersion string) *Job {
 
 	job.Labels = make(map[string]string)
 
-	addDefaultE2EVolumeLabels(job)
 	addDindLabel(job)
-	addMakeVolumesLabel(job)
+	addLocalCacheLabel(job)
+	addGoCacheLabel(job)
 	addRetryFlakesLabel(job)
 	addServiceAccountLabel(job)
 	addVenafiBothLabels(job)
@@ -262,11 +266,11 @@ func E2ETestFeatureGatesDisabled(ctx *ProwContext, k8sVersion string) *Job {
 	job.Labels = make(map[string]string)
 
 	addCloudflareCredentialsLabel(job)
-	addDefaultE2EVolumeLabels(job)
 	addDindLabel(job)
 	addDisableFeatureGatesLabel(job)
 	addGinkgoSkipDefaultLabel(job)
-	addMakeVolumesLabel(job)
+	addLocalCacheLabel(job)
+	addGoCacheLabel(job)
 	addRetryFlakesLabel(job)
 	addServiceAccountLabel(job)
 
@@ -285,11 +289,11 @@ func E2ETestWithBestPracticeInstall(ctx *ProwContext, k8sVersion string) *Job {
 	job.Labels = make(map[string]string)
 
 	addCloudflareCredentialsLabel(job)
-	addDefaultE2EVolumeLabels(job)
 	addDindLabel(job)
 	addDisableFeatureGatesLabel(job)
 	addGinkgoSkipDefaultLabel(job)
-	addMakeVolumesLabel(job)
+	addLocalCacheLabel(job)
+	addGoCacheLabel(job)
 	addRetryFlakesLabel(job)
 	addServiceAccountLabel(job)
 	addBestPracticeInstallLabel(job)
@@ -307,9 +311,9 @@ func UpgradeTest(ctx *ProwContext, k8sVersion string) *Job {
 		"e2e-v"+nameVersion+"-upgrade",
 		"Runs cert-manager upgrade from latest published release",
 		addServiceAccountLabel,
-		addDefaultE2EVolumeLabels,
 		addDindLabel,
-		addMakeVolumesLabel,
+		addLocalCacheLabel,
+		addGoCacheLabel,
 		addMaxConcurrency(4),
 	)
 
@@ -328,7 +332,7 @@ func UpgradeTest(ctx *ProwContext, k8sVersion string) *Job {
 			Resources: ContainerResources{
 				Requests: ContainerResourceRequest{
 					CPU:    "3500m",
-					Memory: "12Gi",
+					Memory: "6Gi",
 				},
 			},
 			SecurityContext: &SecurityContext{
@@ -355,7 +359,8 @@ func TrivyTest(ctx *ProwContext, containerName string) *Job {
 		fmt.Sprintf("trivy-test-%s", containerName),
 		fmt.Sprintf("Runs a Trivy scan against the %s container", containerName),
 		addServiceAccountLabel,
-		addMakeVolumesLabel,
+		addLocalCacheLabel,
+		addGoCacheLabel,
 		addDindLabel,
 		addMaxConcurrency(2),
 		// Need to ensure that trivy tests send a failure email as soon as they fail since
