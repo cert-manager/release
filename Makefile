@@ -40,7 +40,6 @@ test: test-validate-gomod test-validate-gomod-success
 	go test ./pkg/release/manifests
 	@# go test ./pkg/release/validation  # this one is broken
 	go test ./pkg/sign
-	go test ./pkg/prowgen
 
 .PHONY: test-validate-gomod
 test-validate-gomod: bin/cmrel
