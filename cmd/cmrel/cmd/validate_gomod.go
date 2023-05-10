@@ -149,7 +149,7 @@ type internalModuleList struct {
 
 	replaceMap map[string]module.Version
 
-	// internalModuleNames is used for quickly answering the question "is this module name for an internal module". A map is used for O(1) lookup; the boolean is ignored
+	// internalModuleNames is used for quickly answering the question "is this module name for an internal module". A map is used for O(1) lookup; the struct is ignored
 	internalModuleNames map[string]struct{}
 }
 
