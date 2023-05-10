@@ -31,7 +31,10 @@ trap 'rm -f -- $logsfile' EXIT
 
 BASE="validate-gomod-test/broken"
 
-$CMREL --debug validate-gomod --path $BASE &>$logsfile && exitcode=$? || exitcode=$?
+$CMREL --debug validate-gomod \
+	--path $BASE \
+	--no-dummy-modules example.com/nodummy \
+	&>$logsfile && exitcode=$? || exitcode=$?
 
 if [[ $exitcode -eq 0 ]]; then
 	echo "ERROR: expected validate-gomod to fail but got a successful exit code"
@@ -53,19 +56,23 @@ checkline() {
 
 checkline 'module "example.com/acmesolver" has Go version "1.18" but should have "1.19" to match core go.mod file'
 
-checkline 'module "example.com/controller" replaces "example.org/somedependency" with "example.org/somedependency v1.1.2", but the expected replacement was "example.org/somedependency v1.0.1". All replaces should match the core go.mod file and all internal modules should have local replacements'
+checkline 'module "example.com/controller" replaces "example.org/somedependency" with "example.org/somedependency v1.1.2", but the expected replacement was "example.org/somedependency v1.0.1". All replaces should match the core go.mod file'
 
-checkline 'module "example.com/cainjector" replaces "example.com/core" with "../../../ ", but the expected replacement was "../../ ". All replaces should match the core go.mod file and all internal modules should have local replacements'
+checkline 'module "example.com/cainjector" replaces "example.com/core" with "../../../ ", but the expected replacement was "../../ ". Core module replacements should point at the core module'
 
 checkline 'module "example.com/cmctl" requires "example.org/somedependency" which is replaced by "example.org/somedependency v1.0.1" in the core module but is not replaced in this module. Submodules should have the same replacements as the core module'
 
-checkline 'module "example.com/webhook" replaces "example.org/somedependency" with "../../../somedependency-local ", but the expected replacement was "example.org/somedependency v1.0.1". All replaces should match the core go.mod file and all internal modules should have local replacements'
+checkline 'module "example.com/webhook" replaces "example.org/somedependency" with "../../../somedependency-local ", but the expected replacement was "example.org/somedependency v1.0.1". All replaces should match the core go.mod file'
 
 checkline 'module "example.com/integration-tests" imports internal module "example.com/core" with incorrect version; should be "v0.0.0-00010101000000-000000000000"'
 
 checkline 'module "example.com/e2e-tests" imports internal module "example.com/cmctl" with incorrect version; should be "v0.0.0-00010101000000-000000000000"'
 
 checkline 'core module should have no local (filesystem) replaces, but has: "example.com/localreplace"'
+
+checkline 'module "example.com/somebinary" requires the core module "example.com/core". The core module should have a filesystem replacement'
+
+checkline 'module "example.com/nodummy" requires the core module "example.com/core". The core module should have a filesystem replacement'
 
 if [[ $anyerrors -ne 0 ]]; then
 	echo "+++ at least one error was found with validate-gomod output"

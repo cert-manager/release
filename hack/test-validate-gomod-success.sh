@@ -31,7 +31,11 @@ trap 'rm -f -- $logsfile' EXIT
 
 BASE="validate-gomod-test/valid"
 
-$CMREL --debug validate-gomod --path $BASE &>$logsfile && exitcode=$? || exitcode=$?
+$CMREL --debug validate-gomod \
+	--path $BASE \
+	--no-dummy-modules example.com/nodummy \
+	--direct-import-modules example.com/directimport \
+	&>$logsfile && exitcode=$? || exitcode=$?
 
 if [[ $exitcode -ne 0 ]]; then
 	echo "ERROR: expected validate-gomod to succeed but got an error exit code"

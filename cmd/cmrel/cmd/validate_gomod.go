@@ -26,6 +26,7 @@ import (
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
+	"golang.org/x/exp/slices"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 )
@@ -58,6 +59,8 @@ Ensures that:
 	// hardLocalReplace is the path from submodules to the root of the repo. This won't
 	// necessarily always be hardcoded, but for now hardcoding it works
 	hardLocalReplace = "../../"
+
+	noDummyFlag = "no-dummy-modules"
 )
 
 var (
@@ -69,17 +72,33 @@ var (
 type validateGoModOptions struct {
 	// Path is the path of the cert-manager checkout to validate
 	Path string
+
+	// DirectImportModules is an optional list of modules which aren't required to have a local filesystem
+	// replacement of the core module. Directly imported modules implicitly set NoDummyModules too.
+	DirectImportModules []string
+
+	// NoDummyModules is an optional list of modules which are permitted to use a non-dummy
+	// verison of the core module, i.e. to use an actual version instead of dummyCoreImportVersion.
+	NoDummyModules []string
 }
 
 func (o *validateGoModOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Path, "path", "", "Path of cert-manager checkout to validate")
+
+	fs.StringSliceVar(&o.NoDummyModules, noDummyFlag, []string{},
+		"Optional comma-separated list of modules which may import internal modules using an actual rather than dummy version")
+
+	fs.StringSliceVar(&o.DirectImportModules, "direct-import-modules", []string{},
+		fmt.Sprintf("Optional comma-separated list of modules which may import internal modules without needing a local filesystem replace. Directly importable modules imply %q too.", noDummyFlag))
 
 	markRequired("path")
 }
 
 func (o *validateGoModOptions) print() {
 	log.Printf("%s options:", validateGoModCommand)
-	log.Printf("  Path: %q", o.Path)
+	log.Printf("                 Path: %q", o.Path)
+	log.Printf("  DirectImportModules: %q", o.DirectImportModules)
+	log.Printf("       NoDummyModules: %q", o.NoDummyModules)
 }
 
 func validateGoModCmd(rootOpts *rootOptions) *cobra.Command {
@@ -108,7 +127,7 @@ func validateGoModCmd(rootOpts *rootOptions) *cobra.Command {
 func runValidateGoMod(rootOpts *rootOptions, o *validateGoModOptions) error {
 	var validationErrors []error
 
-	allInternalModules, err := findInternalModules(o.Path)
+	allInternalModules, err := findInternalModules(o)
 	if err != nil {
 		return fmt.Errorf("failed to find all submodules in %q: %s", o.Path, err.Error())
 	}
@@ -151,9 +170,15 @@ type internalModuleList struct {
 
 	// internalModuleNames is used for quickly answering the question "is this module name for an internal module". A map is used for O(1) lookup; the struct is ignored
 	internalModuleNames map[string]struct{}
+
+	directImportModules []string
+	noDummyModules      []string
 }
 
 type internalModule struct {
+	// Name is the module path, as would be used in a Go file to import the module.
+	// Some names (i.e., some modules) are treated specially and will have different behavior
+	// when checked.
 	Name string
 
 	// LocalRepoPath is the path to the go.mod file relative to the root of the repository
@@ -169,14 +194,16 @@ type internalModule struct {
 	Module *modfile.File
 }
 
-func findInternalModules(root string) (*internalModuleList, error) {
+func findInternalModules(o *validateGoModOptions) (*internalModuleList, error) {
 	var iml internalModuleList
 
 	iml.internalModuleNames = make(map[string]struct{})
+	iml.directImportModules = o.DirectImportModules
+	iml.noDummyModules = append(o.NoDummyModules, iml.directImportModules...)
 
-	coreModulePath := filepath.Join(root, "go.mod")
+	coreModulePath := filepath.Join(o.Path, "go.mod")
 
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(o.Path, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -207,7 +234,7 @@ func findInternalModules(root string) (*internalModuleList, error) {
 
 		newMod := internalModule{
 			Name:          f.Module.Mod.Path,
-			LocalRepoPath: strings.TrimPrefix(path, root+"/"),
+			LocalRepoPath: strings.TrimPrefix(path, o.Path+"/"),
 			FullGoModPath: path,
 			Module:        f,
 		}
@@ -250,12 +277,17 @@ func findInternalModules(root string) (*internalModuleList, error) {
 	}
 
 	// the core module should always be replaced with a filesystem replacement
-	iml.replaceMap[iml.coreModule.Module.Module.Mod.Path] = module.Version{
+	iml.replaceMap[iml.coreModulePath()] = module.Version{
 		Path:    hardLocalReplace,
 		Version: "",
 	}
 
 	return &iml, nil
+}
+
+// coreModulePath is a simple helper to get the import path for the core module
+func (iml *internalModuleList) coreModulePath() string {
+	return iml.coreModule.Module.Module.Mod.Path
 }
 
 // checkCoreModuleReplacements ensures that the core module doesn't have any local replacements which
@@ -295,7 +327,13 @@ func (iml *internalModuleList) checkReplaces() []error {
 			foundReplaces[replaceStmt.Old.Path] = struct{}{}
 
 			if replaceStmt.New.Path != expectedReplace.Path || replaceStmt.New.Version != expectedReplace.Version {
-				errs = append(errs, fmt.Errorf("module %q replaces %q with \"%s %s\", but the expected replacement was \"%s %s\". All replaces should match the core go.mod file and all internal modules should have local replacements", m.Name, replaceStmt.Old.Path, replaceStmt.New.Path, replaceStmt.New.Version, expectedReplace.Path, expectedReplace.Version))
+				// give a different (clearer) error message for the core module, and enable skipping if the user requested that
+				if replaceStmt.Old.Path == iml.coreModulePath() {
+					errs = append(errs, fmt.Errorf("module %q replaces %q with \"%s %s\", but the expected replacement was \"%s %s\". Core module replacements should point at the core module", m.Name, replaceStmt.Old.Path, replaceStmt.New.Path, replaceStmt.New.Version, expectedReplace.Path, expectedReplace.Version))
+				} else {
+					errs = append(errs, fmt.Errorf("module %q replaces %q with \"%s %s\", but the expected replacement was \"%s %s\". All replaces should match the core go.mod file", m.Name, replaceStmt.Old.Path, replaceStmt.New.Path, replaceStmt.New.Version, expectedReplace.Path, expectedReplace.Version))
+				}
+
 				continue
 			}
 		}
@@ -308,7 +346,16 @@ func (iml *internalModuleList) checkReplaces() []error {
 
 			_, wasReplaced := foundReplaces[requireStmt.Mod.Path]
 			if !wasReplaced {
-				errs = append(errs, fmt.Errorf("module %q requires %q which is replaced by \"%s %s\" in the core module but is not replaced in this module. Submodules should have the same replacements as the core module", m.Name, requireStmt.Mod.Path, coreReplace.Path, coreReplace.Version))
+				if requireStmt.Mod.Path == iml.coreModulePath() {
+					if slices.Contains(iml.directImportModules, m.Name) {
+						// modules which are allowed to directly import the core module don't need a replacement for it
+						continue
+					}
+
+					errs = append(errs, fmt.Errorf("module %q requires the core module %q. The core module should have a filesystem replacement", m.Name, requireStmt.Mod.Path))
+				} else {
+					errs = append(errs, fmt.Errorf("module %q requires %q which is replaced by \"%s %s\" in the core module but is not replaced in this module. Submodules should have the same replacements as the core module", m.Name, requireStmt.Mod.Path, coreReplace.Path, coreReplace.Version))
+				}
 			}
 		}
 	}
@@ -324,6 +371,10 @@ func (iml *internalModuleList) checkInternalModuleRequirements() []error {
 		for _, requireStmt := range m.Module.Require {
 			_, isInternal := iml.internalModuleNames[requireStmt.Mod.Path]
 			if !isInternal {
+				continue
+			}
+
+			if slices.Contains(iml.noDummyModules, m.Name) {
 				continue
 			}
 
