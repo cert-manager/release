@@ -1,6 +1,6 @@
 module example.com/e2e-tests
 
-go 1.19
+go 1.21.3
 
 // cmctl has an actual version below, which should fail as we expect all binaries and tests
 // to be built against the current checkout and not to use upstream versions

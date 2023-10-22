@@ -54,7 +54,7 @@ checkline() {
 	fi
 }
 
-checkline 'module "example.com/acmesolver" has Go version "1.18" but should have "1.19" to match core go.mod file'
+checkline 'module "example.com/acmesolver" has Go version "1.18" but should have "1.21.3" to match core go.mod file'
 
 checkline 'module "example.com/controller" replaces "example.org/somedependency" with "example.org/somedependency v1.1.2", but the expected replacement was "example.org/somedependency v1.0.1". All replaces should match the core go.mod file'
 

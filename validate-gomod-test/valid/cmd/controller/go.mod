@@ -1,6 +1,6 @@
 module example.com/controller
 
-go 1.19
+go 1.21.3
 
 replace (
 	example.com/core => ../../
