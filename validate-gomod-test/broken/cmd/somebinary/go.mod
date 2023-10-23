@@ -1,6 +1,6 @@
 module example.com/somebinary
 
-go 1.19
+go 1.21.3
 
 // Requires the core module but doesn't have a replacement for it
 

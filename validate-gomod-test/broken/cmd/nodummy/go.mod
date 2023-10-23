@@ -1,6 +1,6 @@
 module example.com/nodummy
 
-go 1.19
+go 1.21.3
 
 // This module should be in "NoDummyModules" allowing it to use an actual version for the core module
 // It should fail because it "NoDummyModules" still requires a replace statement for the core module,

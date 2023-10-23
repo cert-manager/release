@@ -1,6 +1,6 @@
 module example.com/cainjector
 
-go 1.19
+go 1.21.3
 
 // This replace is intentionally incorrect and should error.
 replace example.com/core => ../../../

@@ -1,6 +1,6 @@
 module example.com/core
 
-go 1.19
+go 1.21.3
 
 replace example.org/somedependency v1.1.1 => example.org/somedependency v1.0.1
 

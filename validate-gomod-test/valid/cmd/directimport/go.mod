@@ -1,6 +1,6 @@
 module example.com/directimport
 
-go 1.19
+go 1.21.3
 
 // This module should be passed to DirectImportModules and so
 // shouldn't need a replace statement and should be able to use an actual

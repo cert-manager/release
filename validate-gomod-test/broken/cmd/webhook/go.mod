@@ -1,6 +1,6 @@
 module example.com/webhook
 
-go 1.19
+go 1.21.3
 
 // somedependency is replaced by something on the filesystem below, which should
 // fail as the core module has an explicit replace for it and submodules should

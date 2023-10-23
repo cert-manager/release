@@ -1,6 +1,6 @@
 module example.com/core
 
-go 1.19
+go 1.21.3
 
 // We have localreplace replaced below intentionally, which should error as the core
 // module should have no filesystem replaces

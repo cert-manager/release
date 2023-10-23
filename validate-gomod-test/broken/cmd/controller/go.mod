@@ -1,6 +1,6 @@
 module example.com/controller
 
-go 1.19
+go 1.21.3
 
 // The replacement for example.org/somedependency below is intentionally to a different version (v1.1.2)
 // than the one in the core go.mod file (which uses v1.0.1)
