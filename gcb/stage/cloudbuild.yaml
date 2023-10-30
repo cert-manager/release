@@ -13,7 +13,7 @@ steps:
     git clone "${_CM_REPO}" . && git checkout "${_CM_REF}"
 
 ## Clone & checkout the cert-manager release repository
-- name: gcr.io/cloud-builders/go:alpine-1.18
+- name: gcr.io/cloud-builders/go:alpine-1.21
   dir: "go/src/github.com/cert-manager/release"
   entrypoint: sh
   args:

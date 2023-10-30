@@ -4,7 +4,7 @@ steps:
 
 ## Clone & checkout the cert-manager release repository, build cmrel and then
 ## run the bootstrap-pgp command, which will print keys to stdout
-- name: gcr.io/cloud-builders/go:alpine-1.18
+- name: gcr.io/cloud-builders/go:alpine-1.21
   dir: "go/src/github.com/cert-manager/release"
   entrypoint: sh
   args:

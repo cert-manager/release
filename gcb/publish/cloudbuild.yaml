@@ -24,7 +24,7 @@ steps:
 # is roughly equivalent to a labyrinth. Nothing works as expected in this image; running it
 # locally won't help. The original cmrel build below works, so I'm just copying that to end
 # the nightmares and the pain.
-- name: gcr.io/cloud-builders/go:alpine-1.18
+- name: gcr.io/cloud-builders/go:alpine-1.21
   dir: "go/src/github.com/sigstore/cosign"
   entrypoint: sh
   args:
@@ -35,7 +35,7 @@ steps:
     CGO_ENABLED=0 go build -o /workspace/go/bin/cosign ./cmd/cosign
 
 ## Clone & checkout the cert-manager release repository, then build and install
-- name: gcr.io/cloud-builders/go:alpine-1.18
+- name: gcr.io/cloud-builders/go:alpine-1.21
   dir: "go/src/github.com/cert-manager/release"
   entrypoint: sh
   args:
