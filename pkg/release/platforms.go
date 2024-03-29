@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/blang/semver"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -171,4 +172,10 @@ func IsServerOS(os string) bool {
 func IsClientOS(os string) bool {
 	_, isClient := ClientPlatforms[os]
 	return isClient
+}
+
+// Cmctl is only shipped with v1.14.X and below.
+func CmctlIsShipped(releaseVersion string) bool {
+	releaseVersion, _ = strings.CutPrefix(releaseVersion, "v")
+	return semver.MustParse(releaseVersion).LT(semver.MustParse("1.15.0-alpha.0"))
 }

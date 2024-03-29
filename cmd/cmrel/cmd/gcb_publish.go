@@ -419,19 +419,6 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 		manifestsByName[filepath.Base(manifest.Path())] = f
 	}
 
-	// open ctl binary tar files ahead of time to ensure they are available on disk
-	ctlBinariesByName := map[string]*os.File{}
-	for _, ctlBinary := range rel.CtlBinaryBundles {
-		f, err := os.Open(ctlBinary.Filepath())
-		if err != nil {
-			return fmt.Errorf("failed to open manifest file to be uploaded: %v", err)
-		}
-
-		defer f.Close()
-
-		ctlBinariesByName[ctlBinary.ArtifactFilename()] = f
-	}
-
 	log.Printf("Creating a draft GitHub release %q in repository %s/%s", rel.ReleaseVersion, o.PublishedGitHubOrg, o.PublishedGitHubRepo)
 
 	defaultReleaseBody := "!!! Update this release note body before publishing this draft release!"
@@ -466,18 +453,35 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 		log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
 	}
 
-	log.Printf("Uploading %d release binary tars to GitHub release", len(ctlBinariesByName))
-	for name, f := range ctlBinariesByName {
-		asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
-			Name: name,
-		}, f)
-		if err != nil {
-			return fmt.Errorf("failed to upload github release asset: %v", err)
+	if !release.CmctlIsShipped(rel.ReleaseVersion) {
+		// Open ctl binary tar files ahead of time to ensure they are available
+		// on disk.
+		ctlBinariesByName := map[string]*os.File{}
+		for _, ctlBinary := range rel.CtlBinaryBundles {
+			f, err := os.Open(ctlBinary.Filepath())
+			if err != nil {
+				return fmt.Errorf("failed to open manifest file to be uploaded: %v", err)
+			}
+
+			defer f.Close()
+
+			ctlBinariesByName[ctlBinary.ArtifactFilename()] = f
 		}
-		if resp.StatusCode < 200 || resp.StatusCode > 299 {
-			return fmt.Errorf("unexpected response code when uploading github release asset %d", resp.StatusCode)
+
+		log.Printf("Uploading %d release binary tars to GitHub release", len(ctlBinariesByName))
+		for name, f := range ctlBinariesByName {
+			asset, resp, err := githubClient.Repositories.UploadReleaseAsset(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo, *githubRelease.ID, &github.UploadOptions{
+				Name: name,
+			}, f)
+			if err != nil {
+				return fmt.Errorf("failed to upload github release asset: %v", err)
+			}
+			if resp.StatusCode < 200 || resp.StatusCode > 299 {
+				return fmt.Errorf("unexpected response code when uploading github release asset %d", resp.StatusCode)
+			}
+			log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
 		}
-		log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
+
 	}
 
 	o.manualActionLogger.Printf("Update the GitHub release with release notes and hit PUBLISH!")

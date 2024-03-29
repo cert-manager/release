@@ -17,6 +17,7 @@ limitations under the License.
 package release
 
 import (
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -161,6 +162,31 @@ func TestArchListFromString(t *testing.T) {
 			if !reflect.DeepEqual(test.expectedArches, output) {
 				t.Errorf("expected %#v but got %#v", test.expectedArches, output)
 				return
+			}
+		})
+	}
+}
+
+func TestCmctlIsShipped(t *testing.T) {
+	tests := []struct {
+		version string
+		want    bool
+	}{
+		{"1.13.0", true},
+		{"1.14.0", true},
+		{"1.14.0", true},
+		{"1.14.1", true},
+		{"1.14.2-beta.0", true},
+
+		{"1.15.0-alpha.0", false},
+		{"1.15.0-beta.0", false},
+		{"1.15.0", false},
+		{"1.15.1", false},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s", tt.version), func(t *testing.T) {
+			if got := CmctlIsShipped(tt.version); got != tt.want {
+				t.Errorf("isPre114() = %v, want %v", got, tt.want)
 			}
 		})
 	}
