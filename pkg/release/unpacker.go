@@ -43,7 +43,7 @@ type Unpacked struct {
 	GitCommitRef          string
 	Charts                []manifests.Chart
 	YAMLs                 []manifests.YAML
-	CtlBinaryBundles      []binaries.Archive
+	CtlBinaryBundles      []binaries.Archive // Only in v1.14.X and below.
 	ComponentImageBundles map[string][]*images.Tar
 }
 
@@ -95,11 +95,14 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 	}
 	log.Printf("Extracted %d component bundles from images archive", len(bundles))
 
-	ctlBinaryBundles, err := unpackCtlFromRelease(ctx, s)
-	if err != nil {
-		return nil, err
+	var ctlBinaryBundles []binaries.Archive
+	if CmctlIsShipped(s.meta.ReleaseVersion) {
+		ctlBinaryBundles, err := unpackCtlFromRelease(ctx, s)
+		if err != nil {
+			return nil, err
+		}
+		log.Printf("Extracted %d multi arch ctl bundles from cmctl and kubectl-cert_manager archives", len(ctlBinaryBundles))
 	}
-	log.Printf("Extracted %d multi arch ctl bundles from cmctl and kubectl-cert_manager archives", len(ctlBinaryBundles))
 
 	return &Unpacked{
 		ReleaseName:           s.Name(),

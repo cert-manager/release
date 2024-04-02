@@ -216,7 +216,7 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 				}
 			}
 
-			if release.IsClientOS(osVariant) {
+			if release.IsClientOS(osVariant) && release.CmctlIsShipped(releaseVersion) {
 				// add an artifact for the os and arch specific 'cmctl' and 'kubectl-cert_manager' release tarball
 				for _, kind := range []string{"kubectl-cert_manager", "cmctl"} {
 					clientArtifactName := fmt.Sprintf("cert-manager-%s-%s-%s.tar.gz", kind, osVariant, arch)
