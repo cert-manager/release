@@ -97,10 +97,12 @@ func Unpack(ctx context.Context, s *Staged) (*Unpacked, error) {
 
 	var ctlBinaryBundles []binaries.Archive
 	if CmctlIsShipped(s.meta.ReleaseVersion) {
-		ctlBinaryBundles, err := unpackCtlFromRelease(ctx, s)
+		var err error
+		ctlBinaryBundles, err = unpackCtlFromRelease(ctx, s)
 		if err != nil {
 			return nil, err
 		}
+
 		log.Printf("Extracted %d multi arch ctl bundles from cmctl and kubectl-cert_manager archives", len(ctlBinaryBundles))
 	}
 

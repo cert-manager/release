@@ -4,19 +4,22 @@ steps:
 
 ## Clone & checkout the cert-manager release repository, build cmrel and then
 ## run the bootstrap-pgp command, which will print keys to stdout
-- name: gcr.io/cloud-builders/go:alpine-1.21
-  dir: "go/src/github.com/cert-manager/release"
+- name: docker.io/library/golang:1.22-alpine
   entrypoint: sh
   args:
   - -c
   - |
     set -e
-    git clone "${_RELEASE_REPO_URL}" . && git checkout "${_RELEASE_REPO_REF}"
-    CGO_ENABLED=0 go build -o /workspace/go/bin/cmrel ./cmd/cmrel
-    /workspace/go/bin/cmrel gcb bootstrap-pgp --key=${_KMS_KEY}
+    go install github.com/cert-manager/release/cmd/cmrel@${_RELEASE_REPO_REF}
+    /go/bin/cmrel gcb bootstrap-pgp --key=${_KMS_KEY}
 
 tags:
 - "cert-manager-release-bootstrap-pgp"
+
+options:
+  volumes:
+  - name: go-modules
+    path: /go
 
 # Use the --substitutions=_OS=linux,_ARCH=arm64 flag to gcloud build submit to
 # override these values
@@ -24,7 +27,6 @@ substitutions:
   ## Required parameters
   _KMS_KEY: ""
   ## Options controlling the version of the release tooling used in the build.
-  _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
   _RELEASE_REPO_REF: "master"
 
 # we don't specify a machineType manually because we don't need high CPU at all for this

@@ -12,21 +12,17 @@ steps:
     set -e
     git clone "${_CM_REPO}" . && git checkout "${_CM_REF}"
 
-## Clone & checkout the cert-manager release repository
-- name: gcr.io/cloud-builders/go:alpine-1.21
-  dir: "go/src/github.com/cert-manager/release"
-  entrypoint: sh
+steps:
+- name: docker.io/library/golang:1.22-alpine
+  entrypoint: go
   args:
-  - -c
-  - |
-    set -e
-    git clone "${_RELEASE_REPO_URL}" . && git checkout "${_RELEASE_REPO_REF}"
-    CGO_ENABLED=0 go build -o /workspace/go/bin/cmrel ./cmd/cmrel
+  - install
+  - github.com/cert-manager/release/cmd/cmrel@${_RELEASE_REPO_REF}
 
 ## Build and push the release artifacts
 - name: 'gcr.io/cloud-builders/bazel@${_BAZEL_IMAGE_SHA}'
   dir: "go/src/github.com/cert-manager/cert-manager"
-  entrypoint: /workspace/go/bin/cmrel
+  entrypoint: /go/bin/cmrel
   args:
   - gcb
   - stage
@@ -44,6 +40,11 @@ tags:
 - "bazel-${_BAZEL_VERSION}"
 - "ref-${_CM_REF}"
 - "branch-${_TAG_RELEASE_BRANCH}"
+
+options:
+  volumes:
+  - name: go-modules
+    path: /go
 
 # Use the --substitutions=_OS=linux,_ARCH=arm64 flag to gcloud build submit to
 # override these values
@@ -65,7 +66,6 @@ substitutions:
   _TARGET_OSES: "*"
   _TARGET_ARCHES: "*"
   ## Options controlling the version of the release tooling used in the build.
-  _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
   _RELEASE_REPO_REF: "master"
   ## Used as a tag to identify the build more easily later
   _TAG_RELEASE_BRANCH: ""
