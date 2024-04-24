@@ -18,32 +18,17 @@ secrets:
     DOCKER_CONFIG: CiQAPjqeEyZx+aSgFNoW7KQ4wE4hp/9vbWElifjHJNTI0/71ywMSkwIAUOH2xwTfrn72i6p+Op2PYnjDfwMBcInMEtgKAqiTsaup3R5HeL8BsZGuWxVhCEm5CJJ0Rg3CPdFUx2IVmCfC3j32LkAiMxMpszdHTjWHEyWmxwtBlTJW8NFmoYzxfN4Ox9rYFF66eZ0XVdLz1UejXpqAkGFVzTzQSu4rvNFnAsP5Sj7ZKJpXn+p0ZZW1IdMTD0xzCwZjW9hhcTjyNaCKDJYwl8j6Y/bYeoUMrzDQNk48fzKIBgxEdUTR2OOAI785GWSrkB4Y03oEyrfw8jTd1yAoil2S6p3AGV1FbvFleajSCy3Ov+5gjomjtqCbTx06hVsTcqLHC45WzAWPa/8TsiXh5PPgBbkg+pfBQUTj6i9+WA==
 
 steps:
-
-## Clone & checkout the cosign repository, then build and install
-# You'd think we could just use "go install" but the gopath setup in this builder container
-# is roughly equivalent to a labyrinth. Nothing works as expected in this image; running it
-# locally won't help. The original cmrel build below works, so I'm just copying that to end
-# the nightmares and the pain.
-- name: gcr.io/cloud-builders/go:alpine-1.21
-  dir: "go/src/github.com/sigstore/cosign"
-  entrypoint: sh
+- name: docker.io/library/golang:1.22-alpine
+  entrypoint: go
   args:
-  - -c
-  - |
-    set -e
-    git clone "${_COSIGN_REPO_URL}" . && git checkout "${_COSIGN_REPO_REF}"
-    CGO_ENABLED=0 go build -o /workspace/go/bin/cosign ./cmd/cosign
+  - install
+  - github.com/cert-manager/release/cmd/cmrel@${_RELEASE_REPO_REF}
 
-## Clone & checkout the cert-manager release repository, then build and install
-- name: gcr.io/cloud-builders/go:alpine-1.21
-  dir: "go/src/github.com/cert-manager/release"
-  entrypoint: sh
+- name: docker.io/library/golang:1.22-alpine
+  entrypoint: go
   args:
-  - -c
-  - |
-    set -e
-    git clone "${_RELEASE_REPO_URL}" . && git checkout "${_RELEASE_REPO_REF}"
-    CGO_ENABLED=0 go build -o /workspace/go/bin/cmrel ./cmd/cmrel
+  - install
+  - github.com/sigstore/cosign/cmd/cosign@${_COSIGN_REPO_REF}
 
 ## Write DOCKER_CONFIG file to $HOME/.docker/config.json
 - name: gcr.io/cloud-builders/docker:19.03.8
@@ -59,7 +44,7 @@ steps:
 ## Build and push the release artifacts
 - name: gcr.io/cloud-builders/docker:19.03.8
   dir: "go/src/github.com/cert-manager/cert-manager"
-  entrypoint: /workspace/go/bin/cmrel
+  entrypoint: /go/bin/cmrel
   secretEnv:
   - GITHUB_TOKEN
   args:
@@ -77,11 +62,16 @@ steps:
   - --publish-actions=${_PUBLISH_ACTIONS}
   - --signing-kms-key=${_KMS_KEY}
   - --skip-signing=${_SKIP_SIGNING}
-  - --cosign-path=${_COSIGN_PATH}
+  - --cosign-path=/go/bin/cosign
 
 tags:
 - "cert-manager-release-publish"
 - "name-${_TAG_RELEASE_NAME}"
+
+options:
+  volumes:
+  - name: go-modules
+    path: /go
 
 # Use the --substitutions=_OS=linux,_ARCH=arm64 flag to gcloud build submit to
 # override these values
@@ -92,9 +82,6 @@ substitutions:
   _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"
   _SKIP_SIGNING: "false"
   _RELEASE_BUCKET: ""
-  ## Options controlling the version of the release tooling used in the build.
-  _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
-  _RELEASE_REPO_REF: "master"
   _NO_MOCK: "false"
   _PUBLISHED_GITHUB_ORG: ""
   _PUBLISHED_GITHUB_REPO: ""
@@ -106,7 +93,7 @@ substitutions:
   _PUBLISH_ACTIONS: "*"
   ## Used as a tag to identify the build more easily later
   _TAG_RELEASE_NAME: ""
-  ## Cosign details
-  _COSIGN_REPO_URL: https://github.com/sigstore/cosign
-  _COSIGN_REPO_REF: "v1.5.2"
-  _COSIGN_PATH: "/workspace/go/bin/cosign"
+  ## Ref for cert-manager/release repo to use when installing cmrel
+  _RELEASE_REPO_REF: "master"
+  ## Version of the cosign tool to install
+  _COSIGN_REPO_REF: "v1.13.6"
