@@ -453,7 +453,7 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 		log.Printf("Uploaded asset %q to GitHub release %q", *asset.Name, *githubRelease.Name)
 	}
 
-	if !release.CmctlIsShipped(rel.ReleaseVersion) {
+	if release.CmctlIsShipped(rel.ReleaseVersion) {
 		// Open ctl binary tar files ahead of time to ensure they are available
 		// on disk.
 		ctlBinariesByName := map[string]*os.File{}
