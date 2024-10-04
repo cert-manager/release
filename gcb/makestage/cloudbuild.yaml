@@ -1,3 +1,17 @@
+# This is a copy of https://github.com/cert-manager/cert-manager/blob/master/gcb/build_cert_manager.yaml
+# with the following modifications in this version:
+# - The git clone and checkout allows the user to override the repo and ref, to allow testing with forks and branches)
+# - The builder image tag can be overridden, to allow testing new builder images.
+#
+# This version is intended for use with `cmrel makestage`,
+# the version in `cert-manager/cert-manager` run directly by GCB, triggered by
+# the creation of a Git tag.
+#
+# ---
+#
+# If the triggered build fails, while you are releasing cert-manager, you can
+# use `cmrel makestage` to retry the failed build.
+
 # This cloudbuild config file is intended to be triggered when a tag is pushed to the cert-manager repo
 # and will build a cert-manager release and push to Google Cloud Storage (GCS).
 
