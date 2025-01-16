@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"github.com/cenkalti/backoff/v5"
 	"github.com/google/go-github/v35/github"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -490,6 +491,17 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 
 const registryWaitTime = time.Second * 2
 
+func retry(ctx context.Context, f func() error) error {
+	operation := func() (struct{}, error) {
+		err := f()
+		return struct{}{}, err
+	}
+
+	_, err := backoff.Retry(ctx, operation, backoff.WithBackOff(backoff.NewConstantBackOff(registryWaitTime)), backoff.WithMaxTries(5))
+
+	return err
+}
+
 func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("Pushing arch-specific docker images")
 
@@ -510,7 +522,7 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 				return err
 			}
 
-			if err := docker.Push(ctx, imageTag); err != nil {
+			if err := retry(ctx, func() error { return docker.Push(ctx, imageTag) }); err != nil {
 				return err
 			}
 
@@ -544,7 +556,7 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 	log.Printf("Pushing all multi-arch manifest lists")
 	for _, manifestListName := range builtManifestLists {
 		log.Printf("Pushing manifest list %q", manifestListName)
-		if err := docker.PushManifestList(ctx, manifestListName); err != nil {
+		if err := retry(ctx, func() error { return docker.PushManifestList(ctx, manifestListName) }); err != nil {
 			return err
 		}
 
@@ -577,7 +589,7 @@ func signRegistryContent(ctx context.Context, o *gcbPublishOptions, allContentTo
 
 	for _, toSign := range allContentToSign {
 		log.Printf("Signing %q", toSign)
-		if err := cosign.Sign(ctx, o.CosignPath, []string{toSign}, parsedKey); err != nil {
+		if err := retry(ctx, func() error { return cosign.Sign(ctx, o.CosignPath, []string{toSign}, parsedKey) }); err != nil {
 			return fmt.Errorf("failed to sign container image / manifest list %q: %w", toSign, err)
 		}
 
