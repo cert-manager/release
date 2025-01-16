@@ -488,6 +488,8 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 	return nil
 }
 
+const registryWaitTime = time.Second * 2
+
 func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("Pushing arch-specific docker images")
 
@@ -518,8 +520,9 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 
 			log.Printf("Pushed release image %q", imageTag)
 			pushedContent = append(pushedContent, imageTag)
-			// Wait 2 seconds to avoid being rate limited by the registry.
-			time.Sleep(time.Second * 2)
+
+			// Wait to avoid being rate limited by the registry
+			time.Sleep(registryWaitTime)
 		}
 	}
 
@@ -534,6 +537,7 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 		if err := registry.CreateManifestList(ctx, manifestListName, tars); err != nil {
 			return err
 		}
+
 		builtManifestLists = append(builtManifestLists, manifestListName)
 	}
 
@@ -546,6 +550,9 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 
 		pushedContent = append(pushedContent, manifestListName)
 		log.Printf("Pushed multi-arch manifest list %q", manifestListName)
+
+		// Wait to avoid being rate limited by the registry
+		time.Sleep(registryWaitTime)
 	}
 
 	if err := signRegistryContent(ctx, o, pushedContent); err != nil {
@@ -555,24 +562,30 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 	return nil
 }
 
-func signRegistryContent(ctx context.Context, o *gcbPublishOptions, contentToSign []string) error {
+func signRegistryContent(ctx context.Context, o *gcbPublishOptions, allContentToSign []string) error {
 	if o.SkipSigning {
 		log.Println("Skipping signing container images / manifest lists as skip-signing is set")
 		return nil
 	}
 
-	log.Printf("Signing container images")
+	log.Println("Signing container images")
 
 	parsedKey, err := sign.NewGCPKMSKey(o.SigningKMSKey)
 	if err != nil {
 		return err
 	}
 
-	if err := cosign.Sign(ctx, o.CosignPath, contentToSign, parsedKey); err != nil {
-		return fmt.Errorf("failed to sign all container images / manifest lists: %w", err)
+	for _, toSign := range allContentToSign {
+		log.Printf("Signing %q", toSign)
+		if err := cosign.Sign(ctx, o.CosignPath, []string{toSign}, parsedKey); err != nil {
+			return fmt.Errorf("failed to sign container image / manifest list %q: %w", toSign, err)
+		}
+
+		// Wait to avoid being rate limited by the registry
+		time.Sleep(registryWaitTime)
 	}
 
-	log.Printf("Signed container images / manifest lists: %s", strings.Join(contentToSign, ", "))
+	log.Printf("Finished signing: %s", strings.Join(allContentToSign, ", "))
 
 	return nil
 }
