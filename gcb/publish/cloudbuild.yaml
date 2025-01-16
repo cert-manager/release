@@ -18,13 +18,13 @@ secrets:
     DOCKER_CONFIG: CiQAPjqeEyZx+aSgFNoW7KQ4wE4hp/9vbWElifjHJNTI0/71ywMSkwIAUOH2xwTfrn72i6p+Op2PYnjDfwMBcInMEtgKAqiTsaup3R5HeL8BsZGuWxVhCEm5CJJ0Rg3CPdFUx2IVmCfC3j32LkAiMxMpszdHTjWHEyWmxwtBlTJW8NFmoYzxfN4Ox9rYFF66eZ0XVdLz1UejXpqAkGFVzTzQSu4rvNFnAsP5Sj7ZKJpXn+p0ZZW1IdMTD0xzCwZjW9hhcTjyNaCKDJYwl8j6Y/bYeoUMrzDQNk48fzKIBgxEdUTR2OOAI785GWSrkB4Y03oEyrfw8jTd1yAoil2S6p3AGV1FbvFleajSCy3Ov+5gjomjtqCbTx06hVsTcqLHC45WzAWPa/8TsiXh5PPgBbkg+pfBQUTj6i9+WA==
 
 steps:
-- name: docker.io/library/golang:1.22-alpine
+- name: docker.io/library/golang:1.23-alpine
   entrypoint: go
   args:
   - install
   - github.com/cert-manager/release/cmd/cmrel@${_RELEASE_REPO_REF}
 
-- name: docker.io/library/golang:1.22-alpine
+- name: docker.io/library/golang:1.23-alpine
   entrypoint: go
   args:
   - install
