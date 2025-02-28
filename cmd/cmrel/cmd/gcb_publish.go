@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -33,6 +34,9 @@ import (
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"golang.org/x/oauth2"
+	"helm.sh/helm/v3/pkg/pusher"
+	helmregistry "helm.sh/helm/v3/pkg/registry"
+	"helm.sh/helm/v3/pkg/uploader"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/pointer"
 
@@ -97,6 +101,9 @@ type gcbPublishOptions struct {
 	// PublishedGitHubRepo is the repo name in the provided org where the
 	// release will be published to.
 	PublishedGitHubRepo string
+
+	// PublishedOCIHelmChartRegistry is the registry to which helm charts should be published
+	PublishedOCIHelmChartRegistry string
 
 	// SkipSigning, if true, will skip trying to sign artifacts using KMS
 	SkipSigning bool
@@ -185,6 +192,7 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
+	fs.StringVar(&o.PublishedOCIHelmChartRegistry, "published-oci-chart-registry", release.DefaultOCIHelmChartRegistry, "The OCI registry to which the Helm chart should be pushed")
 	fs.StringVar(&o.CosignPath, "cosign-path", "cosign", "Full path to the cosign binary. Defaults to searching in $PATH for a binary called 'cosign'")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
@@ -200,6 +208,7 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  PublishedHelmChartGitHubRepo: %q", o.PublishedHelmChartGitHubRepo)
 	log.Printf("  PublishedHelmChartGitHubOwner: %q", o.PublishedHelmChartGitHubOwner)
 	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
+	log.Printf("  PublishedOCIHelmChartRegistry: %q", o.PublishedOCIHelmChartRegistry)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
 	log.Printf("  CosignPath: %q", o.CosignPath)
@@ -256,6 +265,7 @@ func canonicalizeAndVerifyPublishActions(rawActions []string) ([]string, error) 
 
 var publishActionMap map[string]publishAction = map[string]publishAction{
 	"helmchartpr":         pushHelmChartPR,
+	"helmchartoci":        pushOCIHelmChart,
 	"githubrelease":       pushGitHubRelease,
 	"pushcontainerimages": pushContainerImages,
 }
@@ -401,6 +411,41 @@ func pushHelmChartPR(ctx context.Context, o *gcbPublishOptions, rel *release.Unp
 	o.manualActionLogger.Printf("Review and merge the GitHub PR containing the Helm charts: %s", prURLForHelmCharts)
 
 	return nil
+}
+
+func pushOCIHelmChart(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
+	// based on https://github.com/helm/helm/blob/v3.17.1/pkg/action/push.go
+	charts := rel.Charts
+
+	var errs []error
+
+	for _, chart := range charts {
+		var out strings.Builder
+
+		c := uploader.ChartUploader{
+			Out: &out,
+			Pushers: pusher.Providers{
+				pusher.Provider{
+					Schemes: []string{helmregistry.OCIScheme},
+					New:     pusher.NewOCIPusher,
+				},
+			},
+			Options: []pusher.Option{},
+		}
+
+		chartPath := chart.Path()
+
+		err := c.UploadTo(chartPath, o.PublishedOCIHelmChartRegistry)
+		if err != nil {
+			log.Printf("failed to upload OCI chart %s to %s: %v", chartPath, o.PublishedOCIHelmChartRegistry, err)
+			errs = append(errs, err)
+			continue
+		}
+
+		log.Printf("helm OCI push logs for %s: %s", chartPath, out.String())
+	}
+
+	return errors.Join(errs...)
 }
 
 func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {

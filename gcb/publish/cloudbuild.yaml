@@ -58,6 +58,7 @@ steps:
   - --published-helm-chart-github-owner=${_PUBLISHED_HELM_CHART_GITHUB_OWNER}
   - --published-helm-chart-github-repo=${_PUBLISHED_HELM_CHART_GITHUB_REPO}
   - --published-helm-chart-github-branch=${_PUBLISHED_HELM_CHART_GITHUB_BRANCH}
+  - --published-oci-chart-registry=${_PUBLISHED_OCI_HELM_CHART_REGISTRY}
   - --published-image-repo=${_PUBLISHED_IMAGE_REPO}
   - --publish-actions=${_PUBLISH_ACTIONS}
   - --signing-kms-key=${_KMS_KEY}
@@ -88,6 +89,7 @@ substitutions:
   _PUBLISHED_HELM_CHART_GITHUB_OWNER: ""
   _PUBLISHED_HELM_CHART_GITHUB_REPO: ""
   _PUBLISHED_HELM_CHART_GITHUB_BRANCH: ""
+  _PUBLISHED_OCI_HELM_CHART_REGISTRY: ""
   _PUBLISHED_IMAGE_REPO: ""
   ## Used to control the exact artifacts which will be published
   _PUBLISH_ACTIONS: "*"
