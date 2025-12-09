@@ -2,8 +2,6 @@ module github.com/cert-manager/release
 
 go 1.24.0
 
-toolchain go1.25.5
-
 require (
 	cloud.google.com/go/storage v1.58.0
 	github.com/blang/semver v3.5.1+incompatible
