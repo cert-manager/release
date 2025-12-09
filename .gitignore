@@ -19,3 +19,5 @@ bin/
 # vendor/
 # Other things
 .vscode
+/.idea/
+*.iml
