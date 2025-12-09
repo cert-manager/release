@@ -93,6 +93,9 @@ type publishOptions struct {
 	// release will be published to.
 	PublishedGitHubRepo string
 
+	// PublishedOCIHelmChartRegistry is the registry to which helm charts should be published
+	PublishedOCIHelmChartRegistry string
+
 	// PublishActions is a list of publishing actions which should be taken,
 	// or else "*" - the default - to mean "all actions"
 	PublishActions []string
@@ -104,6 +107,10 @@ type publishOptions struct {
 	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/versions/<KEY_VERSION>
 	// This must be set if SkipSigning is not set to true
 	SigningKMSKey string
+
+	// CmrelRepoRef allows the ref for the cmrel repo to be specified; this
+	// allows running "cmrel gcb publish" using a branch on the main cmrel repo
+	CmrelRepoRef string
 }
 
 func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
@@ -119,9 +126,12 @@ func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
+	fs.StringVar(&o.PublishedOCIHelmChartRegistry, "published-oci-chart-registry", release.DefaultOCIHelmChartRegistry, "The OCI registry to which the Helm chart should be pushed")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Order of operations is preserved if given, or is alphabetical by default. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
+
+	fs.StringVar(&o.CmrelRepoRef, "cmrel-repo-ref", "master", "The ref on the cert-manager/release repo to use when building cmrel in GCB")
 }
 
 func (o *publishOptions) print() {
@@ -135,9 +145,11 @@ func (o *publishOptions) print() {
 	log.Printf("  PublishedHelmChartGitHubRepo: %q", o.PublishedHelmChartGitHubRepo)
 	log.Printf("  PublishedHelmChartGitHubOwner: %q", o.PublishedHelmChartGitHubOwner)
 	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
+	log.Printf("  PublishedOCIHelmChartRegistry: %q", o.PublishedOCIHelmChartRegistry)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
+	log.Printf("  CmrelRepoRef: %q", o.CmrelRepoRef)
 }
 
 func publishCmd(rootOpts *rootOptions) *cobra.Command {
@@ -201,10 +213,12 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_OWNER"] = o.PublishedHelmChartGitHubOwner
 	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_REPO"] = o.PublishedHelmChartGitHubRepo
 	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_BRANCH"] = o.PublishedHelmChartGitHubBranch
+	build.Substitutions["_PUBLISHED_OCI_HELM_CHART_REGISTRY"] = o.PublishedOCIHelmChartRegistry
 	build.Substitutions["_PUBLISHED_IMAGE_REPO"] = o.PublishedImageRepository
 	build.Substitutions["_PUBLISH_ACTIONS"] = strings.Join(o.PublishActions, ",")
 	build.Substitutions["_SKIP_SIGNING"] = fmt.Sprintf("%v", o.SkipSigning)
 	build.Substitutions["_KMS_KEY"] = o.SigningKMSKey
+	build.Substitutions["_RELEASE_REPO_REF"] = o.CmrelRepoRef
 
 	log.Printf("DEBUG: building google cloud build API client")
 	svc, err := cloudbuild.NewService(ctx)

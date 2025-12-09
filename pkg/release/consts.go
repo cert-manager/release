@@ -66,6 +66,9 @@ const (
 	// repository for Helm charts.
 	DefaultHelmChartGitHubBranch = "main"
 
+	// DefaultOCIHelmChartRegistry is the default OCI registry to which charts are pushed
+	DefaultOCIHelmChartRegistry = "oci://quay.io/jetstack/charts"
+
 	// BuildTypeRelease denotes that a build is targeting an actual named
 	// release and is not just a development build that has been created using
 	// the release tool.
