@@ -20,7 +20,7 @@ require (
 	google.golang.org/api v0.257.0
 	helm.sh/helm/v3 v3.19.2
 	k8s.io/apimachinery v0.34.2
-	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
+	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/yaml v1.6.0
 )
 
