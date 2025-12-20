@@ -25,7 +25,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/google/go-github/v35/github"
+	"github.com/google/go-github/v80/github"
 	"github.com/pkg/errors"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"

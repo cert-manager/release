@@ -29,7 +29,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/cenkalti/backoff/v5"
-	"github.com/google/go-github/v35/github"
+	"github.com/google/go-github/v80/github"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"golang.org/x/oauth2"
