@@ -7,7 +7,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/ghodss/yaml v1.0.0
-	github.com/google/go-github/v35 v35.3.0
+	github.com/google/go-github/v80 v80.0.0
 	github.com/google/martian v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.10.2
@@ -45,7 +45,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/go-querystring v1.0.0 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.7 // indirect
