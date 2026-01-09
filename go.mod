@@ -3,7 +3,7 @@ module github.com/cert-manager/release
 go 1.25.0
 
 require (
-	cloud.google.com/go/storage v1.58.0
+	cloud.google.com/go/storage v1.59.0
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/ghodss/yaml v1.0.0
