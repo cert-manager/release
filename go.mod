@@ -3,7 +3,7 @@ module github.com/cert-manager/release
 go 1.25.0
 
 require (
-	cloud.google.com/go/storage v1.59.0
+	cloud.google.com/go/storage v1.59.2
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/ghodss/yaml v1.0.0
@@ -18,7 +18,7 @@ require (
 	golang.org/x/mod v0.31.0
 	golang.org/x/oauth2 v0.34.0
 	google.golang.org/api v0.259.0
-	helm.sh/helm/v3 v3.19.4
+	helm.sh/helm/v3 v3.20.0
 	k8s.io/apimachinery v0.35.0
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/yaml v1.6.0
@@ -66,8 +66,8 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/genproto v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
