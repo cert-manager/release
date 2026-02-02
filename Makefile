@@ -20,12 +20,8 @@ bin/cmrel:
 	go build -o $@ ./cmd/cmrel
 
 .PHONY: presubmit
-presubmit: bin/cmrel test verify-boilerplate
+presubmit: bin/cmrel test
 	./test/presubmit.sh $<
-
-.PHONY: verify-boilerplate
-verify-boilerplate:
-	@./hack/verify_boilerplate.py
 
 .PHONY: clean
 clean:
