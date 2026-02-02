@@ -33,7 +33,7 @@ set -eu -o pipefail
 # may create multiple cosign signatures, but the underlying operation of pushing the chart will not fail if the chart already
 # exists in the registry.
 #
-# See the important note near the bottom about the cosign "--tlog-upload=false" flag.
+# See the important note near the bottom about our issues with cosign and transparency logs.
 
 if [ -z "$RELEASE_VERSION" ]; then
   echo "Error: RELEASE_VERSION environment variable is not set."
@@ -96,10 +96,20 @@ COSIGN_KEY="gcpkms://projects/cert-manager-release/locations/europe-west1/keyRin
 # to specify the digest algorithm for the tlog entry, so verification fails.
 # We solved this for "cosign verify" with a cosign PR[0] a while back, but this problem hasn't been solved for tlog verification.
 # [0]: https://github.com/sigstore/cosign/pull/1071
+#
+# As of cosign 3, --tlog-upload=false is deprecated and we'll eventually have to migrate to using "--signing-config".
+# "--tlog-upload" is incompatible with "--use-signing-config=true".
+# The default in cosign 2 is "--use-signing-config=false".
+# The default in cosign 3 is "--use-signing-config=true", so we have to manually disable it here to keep the same behaviour.
+
+# cosign 3 also changes the default for "--new-bundle-format" to true, so we have to disable that too to keep the same behaviour as cosign 2,
+# until we're able to verify that everything works with the new bundle format.
 
 echo "Signing chart with cosign"
 cosign sign --key $COSIGN_KEY \
   --tlog-upload=false \
+  --new-bundle-format=false \
+  --use-signing-config=false \
   quay.io/jetstack/charts/cert-manager:$RELEASE_VERSION
 
 # See the above comment for why we use --insecure-ignore-tlog=true
