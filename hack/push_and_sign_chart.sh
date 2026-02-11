@@ -22,7 +22,7 @@ set -eu -o pipefail
 #
 # This script assumes that you're already authenticated with the Google Cloud Platform (GCP) project cert-manager-release for downloading
 # the chart and for using the KMS key for signing.
-# It also assumes that you have the gsutil, helm, and cosign commands installed and available in your PATH.
+# It also assumes that you have the gsutil, helm, crane and cosign commands installed and available in your PATH.
 
 # WARNING: Release assets for versions earlier than v1.8.1 have a different path structure and you'll need to manually set the release version
 # to the correct value. On the assumption that this script will almost always used for v1.8.1 and later releases, we don't check this.
@@ -47,6 +47,11 @@ fi
 
 if ! command -v cosign >/dev/null 2>&1; then
   echo "Error: cosign is not installed."
+  exit 1
+fi
+
+if ! command -v crane >/dev/null 2>&1; then
+  echo "Error: crane is not installed."
   exit 1
 fi
 
@@ -115,3 +120,24 @@ cosign sign --key $COSIGN_KEY \
 # See the above comment for why we use --insecure-ignore-tlog=true
 # We do cosign verify here as a sanity check.
 cosign verify --key $COSIGN_KEY --signature-digest-algorithm sha512 --insecure-ignore-tlog=true quay.io/jetstack/charts/cert-manager:$RELEASE_VERSION
+
+echo "Copying chart to non-v-prefixed version"
+
+# We also copy the chart to a non-v-prefixed version for ease of use with helm upgrades where the "latest" version depends on a non-v-prefixed version
+
+RELEASE_VERSION_NO_V=${RELEASE_VERSION#v}
+
+if [ "$RELEASE_VERSION_NO_V" = "$RELEASE_VERSION" ]; then
+  echo "$RELEASE_VERSION is not v-prefixed, skipping copy to non-v-prefixed version"
+  exit 0
+fi
+
+crane copy quay.io/jetstack/charts/cert-manager:$RELEASE_VERSION quay.io/jetstack/charts/cert-manager:$RELEASE_VERSION_NO_V
+
+cosign sign --key $COSIGN_KEY \
+  --tlog-upload=false \
+  --new-bundle-format=false \
+  --use-signing-config=false \
+  quay.io/jetstack/charts/cert-manager:$RELEASE_VERSION_NO_V
+
+cosign verify --key $COSIGN_KEY --signature-digest-algorithm sha512 --insecure-ignore-tlog=true quay.io/jetstack/charts/cert-manager:$RELEASE_VERSION_NO_V
