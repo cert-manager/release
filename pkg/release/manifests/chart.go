@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ghodss/yaml"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/yaml"
 
 	"github.com/cert-manager/release/pkg/release/tar"
 )
@@ -67,7 +67,7 @@ func NewChart(path string) (*Chart, error) {
 		return nil, fmt.Errorf("failed to decode chart metadata: %w", err)
 	}
 
-	provPath := pointer.String(path + ".prov")
+	provPath := ptr.To(path + ".prov")
 
 	_, err = os.Stat(*provPath)
 	if err != nil {

@@ -19,6 +19,7 @@ package helm
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,10 +27,8 @@ import (
 	"strings"
 
 	"github.com/google/go-github/v35/github"
-	"github.com/pkg/errors"
-	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/cert-manager/release/pkg/release/manifests"
 )
@@ -84,14 +83,23 @@ func NewGitHubRepositoryManager(client *GitHubClient, owner, repo, branch string
 // has the repo scope.
 func (o *gitHubRepositoryManager) Check(ctx context.Context) (err error) {
 	var errs []error
+	// FIXME: Rewrite this deferred error handling
 	defer func() {
-		err = errors.WithStack(utilerrors.NewAggregate(errs))
+		// Only join errors if we actually accumulated any, and make sure
+		// we don't lose a non-nil err that is being returned.
+		if len(errs) == 0 {
+			return
+		}
+		if err != nil {
+			errs = append(errs, err)
+		}
+		err = errors.Join(errs...)
 	}()
 
 	// NB: Empty user means current logged in user
 	user, response, err := o.UsersClient.Get(ctx, "")
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 	scopes := strings.Split(response.Header.Get("X-Oauth-Scopes"), ",")
 	for i, scope := range scopes {
@@ -106,7 +114,7 @@ func (o *gitHubRepositoryManager) Check(ctx context.Context) (err error) {
 	if err != nil {
 		var gitHubErr *github.ErrorResponse
 		if !errors.As(err, &gitHubErr) {
-			return errors.WithStack(err)
+			return err
 		}
 		if gitHubErr.Response.StatusCode == http.StatusNotFound {
 			errs = append(
@@ -139,7 +147,7 @@ func (o *gitHubRepositoryManager) Check(ctx context.Context) (err error) {
 	if err != nil {
 		var gitHubErr *github.ErrorResponse
 		if !errors.As(err, &gitHubErr) {
-			return errors.WithStack(err)
+			return err
 		}
 		if gitHubErr.Response.StatusCode == http.StatusNotFound {
 			errs = append(errs, fmt.Errorf("branch %q not found: %v", o.branch, err))
@@ -168,14 +176,14 @@ func (o *gitHubRepositoryManager) Publish(ctx context.Context, releaseName strin
 	}
 	// Create PR
 	npr := &github.NewPullRequest{
-		Title: pointer.StringPtr(fmt.Sprintf(tplPRTitle, releaseName)),
-		Body:  pointer.StringPtr(fmt.Sprintf(tplPRDescription, releaseName)),
-		Base:  pointer.StringPtr(o.branch),
-		Head:  pointer.StringPtr(newBranchName),
+		Title: ptr.To(fmt.Sprintf(tplPRTitle, releaseName)),
+		Body:  ptr.To(fmt.Sprintf(tplPRDescription, releaseName)),
+		Base:  ptr.To(o.branch),
+		Head:  ptr.To(newBranchName),
 	}
 	pr, _, err := o.PullRequestClient.Create(ctx, o.owner, o.repo, npr)
 	if err != nil {
-		return "", errors.WithStack(err)
+		return "", err
 	}
 	prURL := pr.GetHTMLURL()
 	log.Printf("Created PR: %s ", prURL)
@@ -187,16 +195,16 @@ func (o *gitHubRepositoryManager) Publish(ctx context.Context, releaseName strin
 func (o *gitHubRepositoryManager) createBranch(ctx context.Context, sourceName, branchName string) (*github.Reference, error) {
 	baseRef, _, err := o.GitClient.GetRef(ctx, o.owner, o.repo, fmt.Sprintf("refs/heads/%s", sourceName))
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 
 	newRef := &github.Reference{
-		Ref:    pointer.StringPtr(fmt.Sprintf("refs/heads/%s", branchName)),
+		Ref:    ptr.To(fmt.Sprintf("refs/heads/%s", branchName)),
 		Object: baseRef.GetObject(),
 	}
 
 	ref, _, err := o.GitClient.CreateRef(ctx, o.owner, o.repo, newRef)
-	return ref, errors.WithStack(err)
+	return ref, err
 }
 
 // commitChartToBranch uploads a single Helm chart to the target branch, along with its signature if such a signature exists
@@ -207,7 +215,7 @@ func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, ref *
 
 	chartContent, err := os.ReadFile(chart.Path())
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	// we can't just append a github.TreeEntry because the tgz file is binary data and can't be string encoded, which
@@ -218,7 +226,7 @@ func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, ref *
 		Encoding: github.String("base64"),
 	})
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	entries = append(entries, &github.TreeEntry{
@@ -240,7 +248,7 @@ func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, ref *
 		provFileName := chartFileName + ".prov"
 		provContent, err := os.ReadFile(*provPath)
 		if err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 
 		// TreeEntries can create a blob entry if it contains textual data; a prov file does, so
@@ -253,21 +261,17 @@ func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, ref *
 			Mode: github.String("100644"),
 		})
 
-		if err != nil {
-			return errors.WithStack(err)
-		}
-
 		commitMessage = commitMessage + fmt.Sprintf(" and %s", provFileName)
 	}
 
 	tree, _, err := o.GitClient.CreateTree(ctx, o.owner, o.repo, *ref.Object.SHA, entries)
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	parent, _, err := o.RepositoriesClient.GetCommit(ctx, o.owner, o.repo, *ref.Object.SHA)
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	// This needs to be set, according to:
@@ -283,13 +287,13 @@ func (o *gitHubRepositoryManager) commitChartToBranch(ctx context.Context, ref *
 	}
 	newCommit, _, err := o.GitClient.CreateCommit(ctx, o.owner, o.repo, commit)
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	ref.Object.SHA = newCommit.SHA
 	_, _, err = o.GitClient.UpdateRef(ctx, o.owner, o.repo, ref, false)
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 
 	return nil

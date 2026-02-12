@@ -19,10 +19,10 @@ package release
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"cloud.google.com/go/storage"
-	"github.com/google/martian/log"
 	"google.golang.org/api/iterator"
 )
 
@@ -93,7 +93,7 @@ func (b *Bucket) ListReleases(ctx context.Context, version, gitRef string) ([]St
 	for name, objs := range stagedReleases {
 		rel, err := NewStagedRelease(ctx, name, b.prefix, objs...)
 		if err != nil {
-			log.Errorf("Failed to load staged release: %v", err)
+			log.Printf("failed to load staged release: %v", err)
 			continue
 		}
 		staged = append(staged, *rel)
