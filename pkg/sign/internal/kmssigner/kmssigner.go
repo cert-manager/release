@@ -32,7 +32,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/pkg/errors"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 )
 
@@ -53,22 +52,22 @@ type Signer interface {
 func NewWithExplicitMetadata(api *cloudkms.Service, name string, hashAlgo crypto.Hash, creationTime time.Time) (Signer, error) {
 	res, err := api.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.GetPublicKey(name).Do()
 	if err != nil {
-		return nil, errors.WithMessage(err, "could not get public key from Google Cloud KMS API")
+		return nil, fmt.Errorf("could not get public key from Google Cloud KMS API: %w", err)
 	}
 
 	block, _ := pem.Decode([]byte(res.Pem))
 	if block == nil || block.Type != "PUBLIC KEY" {
-		return nil, errors.WithMessage(err, "could not decode public key PEM")
+		return nil, fmt.Errorf("could not decode public key PEM")
 	}
 
 	pubkey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return nil, errors.WithMessage(err, "could not parse public key")
+		return nil, fmt.Errorf("could not parse public key: %w", err)
 	}
 
 	pubkeyRSA, ok := pubkey.(*rsa.PublicKey)
 	if !ok {
-		return nil, errors.WithMessage(err, "public key was not an RSA key as expected")
+		return nil, fmt.Errorf("public key was not an RSA key as expected; got type %T", pubkey)
 	}
 
 	return &kmsSigner{
@@ -85,7 +84,7 @@ func NewWithExplicitMetadata(api *cloudkms.Service, name string, hashAlgo crypto
 func New(api *cloudkms.Service, name string) (Signer, error) {
 	metadata, err := api.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.Get(name).Do()
 	if err != nil {
-		return nil, errors.WithMessage(err, "could not get key version from Google Cloud KMS API")
+		return nil, fmt.Errorf("could not get key version from Google Cloud KMS API: %w", err)
 	}
 
 	var hashAlgo crypto.Hash
@@ -106,7 +105,7 @@ func New(api *cloudkms.Service, name string) (Signer, error) {
 
 	creationTime, err := time.Parse(time.RFC3339Nano, metadata.CreateTime)
 	if err != nil {
-		return nil, errors.WithMessage(err, "could not parse key creation timestamp")
+		return nil, fmt.Errorf("could not parse key creation timestamp: %w", err)
 	}
 
 	return NewWithExplicitMetadata(api, name, hashAlgo, creationTime)
@@ -174,12 +173,12 @@ func (k *kmsSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) 
 		},
 	).Do()
 	if err != nil {
-		return nil, errors.Wrap(err, "error signing with Google Cloud KMS")
+		return nil, fmt.Errorf("error signing with Google Cloud KMS: %w", err)
 	}
 
 	res, err := base64.StdEncoding.DecodeString(sig.Signature)
 	if err != nil {
-		return nil, errors.WithMessage(err, "invalid Base64 response from Google Cloud KMS AsymmetricSign endpoint")
+		return nil, fmt.Errorf("invalid Base64 response from Google Cloud KMS AsymmetricSign endpoint: %w", err)
 	}
 
 	return res, nil

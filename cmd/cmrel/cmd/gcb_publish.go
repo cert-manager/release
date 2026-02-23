@@ -34,7 +34,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	"github.com/cert-manager/release/pkg/release"
 	"github.com/cert-manager/release/pkg/release/docker"
@@ -428,7 +428,7 @@ func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.U
 		TargetCommitish: &rel.GitCommitRef,
 		Name:            &rel.ReleaseVersion,
 		Body:            &defaultReleaseBody,
-		Draft:           pointer.Bool(true),
+		Draft:           ptr.To(true),
 		// TODO: determine whether this ReleaseVersion is a 'prerelease'
 		Prerelease: nil,
 	})
