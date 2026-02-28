@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"strings"
 
-	helmsign "helm.sh/helm/v3/pkg/provenance"
+	helmsign "helm.sh/helm/v4/pkg/provenance"
 )
 
 // HelmChart signs a given packaged helm chart (usually a .tgz file) using the given
