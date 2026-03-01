@@ -69,6 +69,9 @@ tags:
 - "name-${_TAG_RELEASE_NAME}"
 
 options:
+  # https://cloud.google.com/build/docs/optimize-builds/increase-vcpu-for-builds
+  # https://cloud.google.com/build/pricing
+  machineType: E2_HIGHCPU_32
   volumes:
   - name: go-modules
     path: /go
