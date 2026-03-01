@@ -69,6 +69,7 @@ tags:
 - "name-${_TAG_RELEASE_NAME}"
 
 options:
+  machineType: E2_HIGHCPU_32
   volumes:
   - name: go-modules
     path: /go

@@ -187,6 +187,14 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 		return fmt.Errorf("error loading cloudbuild.yaml file: %w", err)
 	}
 
+	if build.Options == nil {
+		build.Options = &cloudbuild.BuildOptions{}
+	}
+
+	if build.Options.MachineType == "" {
+		build.Options.MachineType = "E2_HIGHCPU_32"
+	}
+
 	// make sure that publish-actions is valid
 	_, err = canonicalizeAndVerifyPublishActions(o.PublishActions)
 	if err != nil {

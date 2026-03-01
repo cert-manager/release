@@ -12,7 +12,6 @@ steps:
     set -e
     git clone "${_CM_REPO}" . && git checkout "${_CM_REF}"
 
-steps:
 - name: docker.io/library/golang:1.23-alpine
   entrypoint: go
   args:
@@ -42,6 +41,7 @@ tags:
 - "branch-${_TAG_RELEASE_BRANCH}"
 
 options:
+  machineType: N1_HIGHCPU_32
   volumes:
   - name: go-modules
     path: /go
@@ -70,5 +70,3 @@ substitutions:
   ## Used as a tag to identify the build more easily later
   _TAG_RELEASE_BRANCH: ""
 
-options:
-  machineType: n1-highcpu-32
