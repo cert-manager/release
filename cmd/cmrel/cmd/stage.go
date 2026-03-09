@@ -189,7 +189,11 @@ func runStage(rootOpts *rootOptions, o *stageOptions) error {
 	}
 
 	if build.Options == nil {
-		build.Options = &cloudbuild.BuildOptions{MachineType: "n1-highcpu-32"}
+		build.Options = &cloudbuild.BuildOptions{}
+	}
+
+	if build.Options.MachineType == "" {
+		build.Options.MachineType = "N1_HIGHCPU_32"
 	}
 
 	targetOSes, err := release.OSListFromString(o.TargetOSes)

@@ -144,7 +144,11 @@ func runMakeStage(rootOpts *rootOptions, o *makeStageOptions) error {
 	}
 
 	if build.Options == nil {
-		build.Options = &cloudbuild.BuildOptions{MachineType: "n1-highcpu-32"}
+		build.Options = &cloudbuild.BuildOptions{}
+	}
+
+	if build.Options.MachineType == "" {
+		build.Options.MachineType = "N1_HIGHCPU_32"
 	}
 
 	build.Substitutions["_CM_REF"] = o.Ref
