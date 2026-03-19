@@ -3,7 +3,7 @@ timeout: 14400s
 steps:
 
 ## Clone & checkout the cert-manager repository
-- name: gcr.io/cloud-builders/git
+- name: gcr.io/cloud-builders/git@sha256:429ac93ebe70a594374a50000ab8380cca511aafc1e8023ee01ac16ee7d8cacb
   dir: "go/src/github.com/cert-manager/cert-manager"
   entrypoint: bash
   args:
@@ -12,7 +12,7 @@ steps:
     set -e
     git clone "${_CM_REPO}" . && git checkout "${_CM_REF}"
 
-- name: docker.io/library/golang:1.23-alpine
+- name: docker.io/library/golang:1.23-alpine@sha256:383395b794dffa5b53012a212365d40c8e37109a626ca30d6151c8348d380b5f
   entrypoint: go
   args:
   - install
