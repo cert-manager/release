@@ -19,9 +19,13 @@ package sign
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
-	helmsign "helm.sh/helm/v3/pkg/provenance"
+	helmloader "helm.sh/helm/v4/pkg/chart/v2/loader"
+	helmsign "helm.sh/helm/v4/pkg/provenance"
+	"sigs.k8s.io/yaml"
 )
 
 // HelmChart signs a given packaged helm chart (usually a .tgz file) using the given
@@ -32,7 +36,22 @@ func HelmChart(ctx context.Context, key GCPKMSKey, chartPath string) ([]byte, er
 		return nil, fmt.Errorf("failed to create KMS signer: %w", err)
 	}
 
-	signature, err := signatory.ClearSign(chartPath)
+	archiveData, err := os.ReadFile(chartPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read chart %q: %w", chartPath, err)
+	}
+
+	chart, err := helmloader.LoadFile(chartPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load chart %q: %w", chartPath, err)
+	}
+
+	metadataBytes, err := yaml.Marshal(chart.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal chart metadata for %q: %w", chartPath, err)
+	}
+
+	signature, err := signatory.ClearSign(archiveData, filepath.Base(chartPath), metadataBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign %q: %w", chartPath, err)
 	}
