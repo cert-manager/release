@@ -28,7 +28,22 @@ steps:
   entrypoint: go
   args:
   - install
-  - github.com/sigstore/cosign/cmd/cosign@${_COSIGN_REPO_REF}
+  - github.com/sigstore/cosign/v3/cmd/cosign@${_COSIGN_REPO_REF}
+
+- name: docker.io/library/golang:1.26-alpine@sha256:c2a1f7b2095d046ae14b286b18413a05bb82c9bca9b25fe7ff5efef0f0826166
+  entrypoint: go
+  args:
+  - install
+  - github.com/google/go-containerregistry/cmd/crane@${_CRANE_REPO_REF}
+
+- name: docker.io/library/golang:1.26-alpine@sha256:c2a1f7b2095d046ae14b286b18413a05bb82c9bca9b25fe7ff5efef0f0826166
+  entrypoint: sh
+  args:
+  - -c
+  - |
+    apk add --no-cache curl
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | sh
+    mv /usr/local/bin/helm /go/bin/helm
 
 ## Write DOCKER_CONFIG file to $HOME/.docker/config.json
 - name: gcr.io/cloud-builders/docker:24.0.9@sha256:11725daa24f72d647a67dee9c472b4fbb39ef55c2df268bf6be923333d375923
@@ -63,6 +78,9 @@ steps:
   - --signing-kms-key=${_KMS_KEY}
   - --skip-signing=${_SKIP_SIGNING}
   - --cosign-path=/go/bin/cosign
+  - --published-helm-chart-oci-registry=${_PUBLISHED_HELM_CHART_OCI_REGISTRY}
+  - --helm-path=/go/bin/helm
+  - --crane-path=/go/bin/crane
 
 tags:
 - "cert-manager-release-publish"
@@ -89,6 +107,7 @@ substitutions:
   _PUBLISHED_HELM_CHART_GITHUB_OWNER: ""
   _PUBLISHED_HELM_CHART_GITHUB_REPO: ""
   _PUBLISHED_HELM_CHART_GITHUB_BRANCH: ""
+  _PUBLISHED_HELM_CHART_OCI_REGISTRY: "quay.io/jetstack/charts"
   _PUBLISHED_IMAGE_REPO: ""
   ## Used to control the exact artifacts which will be published
   _PUBLISH_ACTIONS: "*"
@@ -97,4 +116,6 @@ substitutions:
   ## Ref for cert-manager/release repo to use when installing cmrel
   _RELEASE_REPO_REF: "master"
   ## Version of the cosign tool to install
-  _COSIGN_REPO_REF: "v1.13.6"
+  _COSIGN_REPO_REF: "v3.0.6"
+  ## Version of the crane tool to install
+  _CRANE_REPO_REF: "v0.21.5"
