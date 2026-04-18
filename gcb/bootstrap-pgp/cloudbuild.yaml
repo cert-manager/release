@@ -4,7 +4,7 @@ steps:
 
 ## Clone & checkout the cert-manager release repository, build cmrel and then
 ## run the bootstrap-pgp command, which will print keys to stdout
-- name: docker.io/library/golang:1.26-alpine@sha256:c2a1f7b2095d046ae14b286b18413a05bb82c9bca9b25fe7ff5efef0f0826166
+- name: docker.io/library/golang:1.26-alpine@sha256:f85330846cde1e57ca9ec309382da3b8e6ae3ab943d2739500e08c86393a21b1
   entrypoint: sh
   args:
   - -c
