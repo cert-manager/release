@@ -18,6 +18,7 @@ package cosign
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cert-manager/release/pkg/shell"
 	"github.com/cert-manager/release/pkg/sign"
@@ -37,4 +38,51 @@ func Sign(ctx context.Context, cosignPath string, containers []string, key sign.
 // Version calls "cosign version", both for informational purposes and as a check that the binary exists
 func Version(ctx context.Context, cosignPath string) error {
 	return shell.Command(ctx, "", cosignPath, []string{"version"}...)
+}
+
+// SignOptions contains options for signing with cosign
+type SignOptions struct {
+	TlogUpload       bool
+	NewBundleFormat  bool
+	UseSigningConfig bool
+}
+
+// SignWithOptions calls out to cosign to sign a container with specific options
+func SignWithOptions(ctx context.Context, cosignPath string, container string, key sign.GCPKMSKey, opts SignOptions) error {
+	args := []string{
+		"sign",
+		"--key", key.CosignFormat(),
+		"--tlog-upload=" + fmt.Sprintf("%t", opts.TlogUpload),
+		"--new-bundle-format=" + fmt.Sprintf("%t", opts.NewBundleFormat),
+		"--use-signing-config=" + fmt.Sprintf("%t", opts.UseSigningConfig),
+		container,
+	}
+
+	return shell.Command(ctx, "", cosignPath, args...)
+}
+
+// VerifyOptions contains options for verifying with cosign
+type VerifyOptions struct {
+	SignatureDigestAlgorithm string
+	InsecureIgnoreTlog       bool
+}
+
+// VerifyWithOptions calls out to cosign to verify a container signature with specific options
+func VerifyWithOptions(ctx context.Context, cosignPath string, container string, key sign.GCPKMSKey, opts VerifyOptions) error {
+	args := []string{
+		"verify",
+		"--key", key.CosignFormat(),
+	}
+
+	if opts.SignatureDigestAlgorithm != "" {
+		args = append(args, "--signature-digest-algorithm", opts.SignatureDigestAlgorithm)
+	}
+
+	if opts.InsecureIgnoreTlog {
+		args = append(args, "--insecure-ignore-tlog=true")
+	}
+
+	args = append(args, container)
+
+	return shell.Command(ctx, "", cosignPath, args...)
 }
