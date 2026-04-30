@@ -93,6 +93,9 @@ type publishOptions struct {
 	// release will be published to.
 	PublishedGitHubRepo string
 
+	// PublishedHelmChartOCIRegistry is the OCI registry to push Helm charts to
+	PublishedHelmChartOCIRegistry string
+
 	// PublishActions is a list of publishing actions which should be taken,
 	// or else "*" - the default - to mean "all actions"
 	PublishActions []string
@@ -119,6 +122,7 @@ func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
+	fs.StringVar(&o.PublishedHelmChartOCIRegistry, "published-helm-chart-oci-registry", defaultHelmOCIRegistry, "The OCI registry to push Helm charts to.")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Order of operations is preserved if given, or is alphabetical by default. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
@@ -137,6 +141,7 @@ func (o *publishOptions) print() {
 	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
+	log.Printf("  PublishedHelmChartOCIRegistry: %q", o.PublishedHelmChartOCIRegistry)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
 }
 
@@ -209,6 +214,7 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_OWNER"] = o.PublishedHelmChartGitHubOwner
 	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_REPO"] = o.PublishedHelmChartGitHubRepo
 	build.Substitutions["_PUBLISHED_HELM_CHART_GITHUB_BRANCH"] = o.PublishedHelmChartGitHubBranch
+	build.Substitutions["_PUBLISHED_HELM_CHART_OCI_REGISTRY"] = o.PublishedHelmChartOCIRegistry
 	build.Substitutions["_PUBLISHED_IMAGE_REPO"] = o.PublishedImageRepository
 	build.Substitutions["_PUBLISH_ACTIONS"] = strings.Join(o.PublishActions, ",")
 	build.Substitutions["_SKIP_SIGNING"] = fmt.Sprintf("%v", o.SkipSigning)
