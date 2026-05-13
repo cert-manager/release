@@ -15,7 +15,7 @@ require (
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.277.0
 	helm.sh/helm/v4 v4.1.4
-	k8s.io/apimachinery v0.36.0
+	k8s.io/apimachinery v0.36.1
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
 	sigs.k8s.io/yaml v1.6.0
 )
