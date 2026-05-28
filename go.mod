@@ -3,7 +3,7 @@ module github.com/cert-manager/release
 go 1.26.0
 
 require (
-	cloud.google.com/go/storage v1.62.1
+	cloud.google.com/go/storage v1.62.2
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cenkalti/backoff/v5 v5.0.3
