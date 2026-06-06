@@ -3,7 +3,7 @@ timeout: 14400s
 steps:
 
 ## Clone & checkout the cert-manager repository
-- name: gcr.io/cloud-builders/git@sha256:1c28962bb21ff5956aa5807c5a879ea24ec5cd27e3d1b61a4b4d549b94466980
+- name: gcr.io/cloud-builders/git@sha256:2bb3ccae716ecfb9766fd602b5ce3033b12086bb905af0061e02f5aaf32b09fa
   dir: "go/src/github.com/cert-manager/cert-manager"
   entrypoint: bash
   args:
