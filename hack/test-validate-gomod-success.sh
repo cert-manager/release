@@ -29,7 +29,7 @@ logsfile=$(mktemp)
 
 trap 'rm -f -- $logsfile' EXIT
 
-BASE="validate-gomod-test/valid"
+BASE="testdata/valid"
 
 $CMREL --debug validate-gomod \
 	--path $BASE \
