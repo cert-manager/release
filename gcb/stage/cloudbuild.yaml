@@ -12,7 +12,7 @@ steps:
     set -e
     git clone "${_CM_REPO}" . && git checkout "${_CM_REF}"
 
-- name: docker.io/library/golang:1.26-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
+- name: docker.io/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
   entrypoint: go
   args:
   - install
