@@ -58,6 +58,9 @@ func ValidateUnpackedRelease(opts Options, rel *release.Unpacked) ([]string, err
 }
 
 func validateSemver(v string) error {
+	if v == "" {
+		return fmt.Errorf("version number is empty")
+	}
 	if v[0] != 'v' {
 		return fmt.Errorf("version number must have a leading 'v' character")
 	}

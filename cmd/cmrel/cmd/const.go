@@ -21,3 +21,6 @@ package cmd
 // WARNING: cosign requires a different format for the key; this is the format required by the GCP API but not cosign (which needs "versions" instead of "cryptoKeyVersions")
 // WARNING: This key is *manually* copied to hack/push_and_sign_chart.sh - if you update this key, you must also update that script.
 const defaultKMSKey = "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"
+
+// defaultHelmOCIRegistry is the default OCI registry to push Helm charts to
+const defaultHelmOCIRegistry = "quay.io/jetstack/charts"
