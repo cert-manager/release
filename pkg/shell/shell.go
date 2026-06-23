@@ -22,8 +22,13 @@ import (
 	"os/exec"
 )
 
-// Command runs the given command with the given args
-func Command(ctx context.Context, workDir string, cmd string, args ...string) error {
+// Runner runs a command. Tests can substitute fake implementations to record
+// invocations without actually executing the binary.
+type Runner func(ctx context.Context, workDir string, cmd string, args ...string) error
+
+// Default is the Runner that actually invokes the command via exec.CommandContext,
+// streaming stdout/stderr to the process's standard streams.
+var Default Runner = func(ctx context.Context, workDir string, cmd string, args ...string) error {
 	c := exec.CommandContext(ctx, cmd, args...)
 
 	// redirect all output
@@ -34,4 +39,9 @@ func Command(ctx context.Context, workDir string, cmd string, args ...string) er
 	c.Dir = workDir
 
 	return c.Run()
+}
+
+// Command runs the given command with the given args using the Default runner.
+func Command(ctx context.Context, workDir string, cmd string, args ...string) error {
+	return Default(ctx, workDir, cmd, args...)
 }
