@@ -6,7 +6,7 @@
   "packageRules": [
     {
       "matchFileNames": [
-        "testdata/**"
+        "**/testdata/**"
       ],
       "enabled": false
     }
