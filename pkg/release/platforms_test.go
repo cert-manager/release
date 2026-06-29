@@ -182,6 +182,13 @@ func TestCmctlIsShipped(t *testing.T) {
 		{"1.15.0-beta.0", false},
 		{"1.15.0", false},
 		{"1.15.1", false},
+
+		// Invalid semver inputs should not panic - callers in the validation
+		// path can reach this with malformed versions they are about to flag
+		// as a violation, so we want a safe default rather than a crash.
+		{"", false},
+		{"v0.15", false},
+		{"not-a-version", false},
 	}
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s", tt.version), func(t *testing.T) {

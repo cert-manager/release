@@ -41,6 +41,7 @@ import (
 	"github.com/cert-manager/release/pkg/release/helm"
 	"github.com/cert-manager/release/pkg/release/publish/registry"
 	"github.com/cert-manager/release/pkg/release/validation"
+	"github.com/cert-manager/release/pkg/shell"
 	"github.com/cert-manager/release/pkg/sign"
 	"github.com/cert-manager/release/pkg/sign/cosign"
 )
@@ -112,6 +113,20 @@ type gcbPublishOptions struct {
 	// CosignPath points to the location of the cosign binary
 	CosignPath string
 
+	// PublishedHelmChartOCIRegistry is the OCI registry to push Helm charts to
+	PublishedHelmChartOCIRegistry string
+
+	// HelmPath points to the location of the helm binary
+	HelmPath string
+
+	// CranePath points to the location of the crane binary
+	CranePath string
+
+	// Runner is the shell command runner used to invoke external binaries
+	// (helm, crane, cosign). Tests can substitute a fake runner to avoid
+	// actually shelling out (and, importantly, to avoid hitting the KMS API).
+	Runner shell.Runner
+
 	// manualActionLogger logs to a buffer and is used by publish actions to log any manual
 	// actions that must be taken by the user even after a successful publish is completed.
 	// Get the log contents with ManualActionText()
@@ -122,7 +137,9 @@ type gcbPublishOptions struct {
 
 // NewGCBPublishOptions creates options and initializes loggers correctly
 func NewGCBPublishOptions() *gcbPublishOptions {
-	o := &gcbPublishOptions{}
+	o := &gcbPublishOptions{
+		Runner: shell.Default,
+	}
 
 	o.manualActionLogger = log.New(&o.manualActionBuffer, "* ", 0)
 
@@ -188,6 +205,9 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.CosignPath, "cosign-path", "cosign", "Full path to the cosign binary. Defaults to searching in $PATH for a binary called 'cosign'")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
+	fs.StringVar(&o.PublishedHelmChartOCIRegistry, "published-helm-chart-oci-registry", defaultHelmOCIRegistry, "The OCI registry to push Helm charts to.")
+	fs.StringVar(&o.HelmPath, "helm-path", "helm", "Full path to the helm binary. Defaults to searching in $PATH for a binary called 'helm'")
+	fs.StringVar(&o.CranePath, "crane-path", "crane", "Full path to the crane binary. Defaults to searching in $PATH for a binary called 'crane'")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 }
 
@@ -205,6 +225,9 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  CosignPath: %q", o.CosignPath)
 	log.Printf("  SkipSigning: %v", o.SkipSigning)
 	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
+	log.Printf("  PublishedHelmChartOCIRegistry: %q", o.PublishedHelmChartOCIRegistry)
+	log.Printf("  HelmPath: %q", o.HelmPath)
+	log.Printf("  CranePath: %q", o.CranePath)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
 }
 
@@ -255,9 +278,12 @@ func canonicalizeAndVerifyPublishActions(rawActions []string) ([]string, error) 
 }
 
 var publishActionMap map[string]publishAction = map[string]publishAction{
-	"helmchartpr":         pushHelmChartPR,
+	"helmchartoci":        pushHelmChartOCI,
 	"githubrelease":       pushGitHubRelease,
 	"pushcontainerimages": pushContainerImages,
+
+	// helmchartpr has been deprecated in favour of helmchartoci
+	// "helmchartpr":         pushHelmChartPR,
 }
 
 func gcbPublishCmd(rootOpts *rootOptions) *cobra.Command {
@@ -367,6 +393,127 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	log.Printf("+++++++++ Publishing release completed successfully! +++++++++")
 	log.Printf("You MUST now perform the following manual tasks:\n%s", o.ManualActionText())
 
+	return nil
+}
+
+// chartSignOpts are the cosign sign flags we use for Helm charts.
+//
+// Why TlogUpload=false?
+// This flag prevents us creating a tlog entry for the signature, which is
+// usually a good thing to do. Unfortunately, as well as creating the tlog
+// entry, cosign also attempts to verify the tlog entry, which is the issue
+// we run into - our KMS key uses SHA-512 as the signature digest algorithm,
+// but there's no option to specify the digest algorithm for the tlog entry,
+// so verification fails. We solved this for "cosign verify" with a cosign PR[0]
+// a while back, but this problem hasn't been solved for tlog verification.
+// [0]: https://github.com/sigstore/cosign/pull/1071
+//
+// As of cosign 3, --tlog-upload=false is deprecated and we'll eventually have
+// to migrate to using "--signing-config". "--tlog-upload" is incompatible with
+// "--use-signing-config=true". The default in cosign 2 is "--use-signing-config=false".
+// The default in cosign 3 is "--use-signing-config=true", so we have to manually
+// disable it here to keep the same behaviour.
+//
+// cosign 3 also changes the default for "--new-bundle-format" to true, so we
+// have to disable that too to keep the same behaviour as cosign 2, until we're
+// able to verify that everything works with the new bundle format.
+var chartSignOpts = cosign.SignOptions{
+	TlogUpload:       false,
+	NewBundleFormat:  false,
+	UseSigningConfig: false,
+}
+
+// chartVerifyOpts are the cosign verify flags we use for Helm charts. See the
+// chartSignOpts comment for why we ignore tlog.
+var chartVerifyOpts = cosign.VerifyOptions{
+	SignatureDigestAlgorithm: "sha512",
+	InsecureIgnoreTlog:       true,
+}
+
+func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
+	log.Printf("Pushing Helm chart to OCI registry %q", o.PublishedHelmChartOCIRegistry)
+
+	runner := o.Runner
+	if runner == nil {
+		runner = shell.Default
+	}
+
+	// Verify tools are available
+	log.Printf("Verifying helm installation")
+	if err := runner(ctx, "", o.HelmPath, "version"); err != nil {
+		return fmt.Errorf("failed to verify helm installation: %w", err)
+	}
+
+	log.Printf("Verifying crane installation")
+	if err := runner(ctx, "", o.CranePath, "version"); err != nil {
+		return fmt.Errorf("failed to verify crane installation: %w", err)
+	}
+
+	if len(rel.Charts) == 0 {
+		return fmt.Errorf("no charts found in unpacked release")
+	}
+
+	ociURL := fmt.Sprintf("oci://%s", o.PublishedHelmChartOCIRegistry)
+
+	var parsedKey sign.GCPKMSKey
+	if !o.SkipSigning {
+		var err error
+		parsedKey, err = sign.NewGCPKMSKey(o.SigningKMSKey)
+		if err != nil {
+			return fmt.Errorf("failed to parse KMS key: %w", err)
+		}
+	}
+
+	for _, chart := range rel.Charts {
+		if chart.ProvPath() == nil {
+			log.Printf("Warning: .prov file not found for chart %q in release %s - this should only happen for releases earlier than v1.6.0", chart.Name(), rel.ReleaseVersion)
+		}
+
+		// Push chart to OCI registry (helm automatically pushes .prov if it exists)
+		log.Printf("Pushing chart %q to %s", chart.Name(), ociURL)
+		if err := helm.PushChartToOCI(ctx, runner, chart.Path(), ociURL, o.HelmPath); err != nil {
+			return fmt.Errorf("failed to push chart %q to OCI registry: %w", chart.Name(), err)
+		}
+
+		if o.SkipSigning {
+			log.Printf("Skipping signing for chart %q as skip-signing is set", chart.Name())
+			continue
+		}
+
+		chartRef := fmt.Sprintf("%s/%s:%s", o.PublishedHelmChartOCIRegistry, chart.Name(), rel.ReleaseVersion)
+		log.Printf("Signing chart %s with cosign", chartRef)
+		if err := cosign.SignWithOptions(ctx, runner, o.CosignPath, chartRef, parsedKey, chartSignOpts); err != nil {
+			return fmt.Errorf("failed to sign chart %q: %w", chart.Name(), err)
+		}
+
+		log.Printf("Verifying chart signature for %s", chartRef)
+		if err := cosign.VerifyWithOptions(ctx, runner, o.CosignPath, chartRef, parsedKey, chartVerifyOpts); err != nil {
+			return fmt.Errorf("failed to verify chart signature for %q: %w", chart.Name(), err)
+		}
+
+		// Handle non-v-prefixed version if applicable
+		if strings.HasPrefix(rel.ReleaseVersion, "v") {
+			nonVVersion := strings.TrimPrefix(rel.ReleaseVersion, "v")
+			destRef := fmt.Sprintf("%s/%s:%s", o.PublishedHelmChartOCIRegistry, chart.Name(), nonVVersion)
+			log.Printf("Copying chart %q to non-v-prefixed version: %s", chart.Name(), destRef)
+
+			if err := helm.CopyChartTag(ctx, runner, chartRef, destRef, o.CranePath); err != nil {
+				return fmt.Errorf("failed to copy chart tag for %q: %w", chart.Name(), err)
+			}
+
+			log.Printf("Signing non-v-prefixed chart %s", destRef)
+			if err := cosign.SignWithOptions(ctx, runner, o.CosignPath, destRef, parsedKey, chartSignOpts); err != nil {
+				return fmt.Errorf("failed to sign non-v chart %q: %w", chart.Name(), err)
+			}
+
+			log.Printf("Verifying non-v-prefixed chart signature for %s", destRef)
+			if err := cosign.VerifyWithOptions(ctx, runner, o.CosignPath, destRef, parsedKey, chartVerifyOpts); err != nil {
+				return fmt.Errorf("failed to verify non-v chart signature for %q: %w", chart.Name(), err)
+			}
+		}
+	}
+
+	log.Printf("Successfully pushed and signed %d Helm chart(s) to OCI registry", len(rel.Charts))
 	return nil
 }
 
@@ -567,14 +714,14 @@ func pushContainerImages(ctx context.Context, o *gcbPublishOptions, rel *release
 		time.Sleep(registryWaitTime)
 	}
 
-	if err := signRegistryContent(ctx, o, pushedContent); err != nil {
+	if err := signOCIImages(ctx, o, pushedContent); err != nil {
 		return fmt.Errorf("failed to sign images: %w", err)
 	}
 
 	return nil
 }
 
-func signRegistryContent(ctx context.Context, o *gcbPublishOptions, allContentToSign []string) error {
+func signOCIImages(ctx context.Context, o *gcbPublishOptions, allContentToSign []string) error {
 	if o.SkipSigning {
 		log.Println("Skipping signing container images / manifest lists as skip-signing is set")
 		return nil
