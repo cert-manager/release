@@ -31,7 +31,7 @@ steps:
   - github.com/sigstore/cosign/cmd/cosign@${_COSIGN_REPO_REF}
 
 ## Write DOCKER_CONFIG file to $HOME/.docker/config.json
-- name: gcr.io/cloud-builders/docker:24.0.9@sha256:eb62590b3e7174adae5c23e52e4f226601eb66cbb5cca7642cdef3249c288cf0
+- name: gcr.io/cloud-builders/docker:24.0.9@sha256:bc2f5cc174a6d10be20f2b529ecbeee07a47d08871401d42e2b3e833dc20d227
   entrypoint: bash
   secretEnv:
   - DOCKER_CONFIG
@@ -42,7 +42,7 @@ steps:
     echo "$${DOCKER_CONFIG}" > $$HOME/.docker/config.json
 
 ## Build and push the release artifacts
-- name: gcr.io/cloud-builders/docker:24.0.9@sha256:eb62590b3e7174adae5c23e52e4f226601eb66cbb5cca7642cdef3249c288cf0
+- name: gcr.io/cloud-builders/docker:24.0.9@sha256:bc2f5cc174a6d10be20f2b529ecbeee07a47d08871401d42e2b3e833dc20d227
   dir: "go/src/github.com/cert-manager/cert-manager"
   entrypoint: /go/bin/cmrel
   secretEnv:
