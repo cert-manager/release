@@ -54,6 +54,12 @@ func UntarGz(dst string, r io.Reader) error {
 			continue
 		}
 
+		// reject any entry whose name would escape the destination directory
+		// (e.g. "../../go/bin/cosign" or an absolute path).
+		if !filepath.IsLocal(header.Name) {
+			return fmt.Errorf("refusing to extract %q: entry path escapes the destination directory", header.Name)
+		}
+
 		// the target location where the dir/file should be created
 		target := filepath.Join(dst, header.Name)
 
@@ -74,19 +80,25 @@ func UntarGz(dst string, r io.Reader) error {
 
 		// if it's a file create it
 		case tar.TypeReg:
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			// O_EXCL ensures we never follow into or overwrite an existing file,
+			// and we mask to permission bits so a malicious archive cannot set setuid/setgid/sticky bits.
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR|os.O_EXCL, os.FileMode(header.Mode).Perm())
 			if err != nil {
 				return err
 			}
 
 			// copy over contents
 			if _, err := io.Copy(f, tr); err != nil {
+				f.Close()
 				return err
 			}
 
 			// manually close here after each file operation; defering would cause each file close
 			// to wait until all operations have completed.
 			f.Close()
+
+		case tar.TypeSymlink, tar.TypeLink:
+			return fmt.Errorf("refusing to extract %q: symlinks and hardlinks are not permitted in release archives", header.Name)
 		}
 	}
 }
