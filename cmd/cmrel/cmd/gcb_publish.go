@@ -98,6 +98,10 @@ type gcbPublishOptions struct {
 	// release will be published to.
 	PublishedGitHubRepo string
 
+	// ExpectedMetadataSHA256, if set, is the hex-encoded SHA-256 digest that the
+	// staged metadata.json must match before the release is unpacked and published.
+	ExpectedMetadataSHA256 string
+
 	// SkipSigning, if true, will skip trying to sign artifacts using KMS
 	SkipSigning bool
 
@@ -187,6 +191,7 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
 	fs.StringVar(&o.CosignPath, "cosign-path", "cosign", "Full path to the cosign binary. Defaults to searching in $PATH for a binary called 'cosign'")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
+	fs.StringVar(&o.ExpectedMetadataSHA256, "expected-metadata-sha256", "", "If set, the hex-encoded SHA-256 digest of the staged metadata.json is verified against this value before the release is unpacked. Obtain this value out-of-band from the 'gcb stage' build log to ensure the staged release has not been tampered with. If empty, the check is skipped and a warning is logged.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 }
@@ -205,6 +210,7 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  CosignPath: %q", o.CosignPath)
 	log.Printf("  SkipSigning: %v", o.SkipSigning)
 	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
+	log.Printf("  ExpectedMetadataSHA256: %q", o.ExpectedMetadataSHA256)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
 }
 
@@ -309,6 +315,11 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 
 	log.Printf("Release with version %q (%s) will be published", staged.Metadata().ReleaseVersion, staged.Metadata().GitCommitRef)
 
+	// Verify the integrity of the staged metadata.json before trusting anything it describes.
+	if err := verifyStagedMetadata(o, staged); err != nil {
+		return err
+	}
+
 	rel, err := release.Unpack(ctx, staged)
 	if err != nil {
 		return fmt.Errorf("failed to unpack staged release: %w", err)
@@ -367,6 +378,25 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	log.Printf("+++++++++ Publishing release completed successfully! +++++++++")
 	log.Printf("You MUST now perform the following manual tasks:\n%s", o.ManualActionText())
 
+	return nil
+}
+
+// verifyStagedMetadata compares the SHA-256 digest of the staged metadata.json
+// against the expected value supplied by the operator.
+func verifyStagedMetadata(o *gcbPublishOptions, staged *release.Staged) error {
+	actual := staged.MetadataSHA256()
+
+	if o.ExpectedMetadataSHA256 == "" {
+		log.Printf("WARNING: --expected-metadata-sha256 was not set; skipping staged metadata authenticity check. "+
+			"The staged metadata.json (sha256 %s) is being trusted without out-of-band verification.", actual)
+		return nil
+	}
+
+	if !strings.EqualFold(strings.TrimSpace(o.ExpectedMetadataSHA256), actual) {
+		return fmt.Errorf("staged metadata.json sha256 %q does not match expected value %q - refusing to publish", actual, o.ExpectedMetadataSHA256)
+	}
+
+	log.Printf("Verified staged metadata.json against expected sha256 %s", actual)
 	return nil
 }
 

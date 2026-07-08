@@ -18,8 +18,11 @@ package release
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -30,10 +33,11 @@ import (
 // It provides convenience methods to interact with release build and inspect
 // metadata.
 type Staged struct {
-	name      string
-	prefix    string
-	meta      Metadata
-	artifacts []StagedArtifact
+	name           string
+	prefix         string
+	meta           Metadata
+	metadataSHA256 string
+	artifacts      []StagedArtifact
 }
 
 // StagedArtifact represents a single artifact within a release, with some
@@ -44,7 +48,7 @@ type StagedArtifact struct {
 }
 
 func NewStagedRelease(ctx context.Context, name, prefix string, objects ...*storage.ObjectHandle) (*Staged, error) {
-	meta, err := loadReleaseMetadataFile(ctx, objects...)
+	meta, metadataSHA256, err := loadReleaseMetadataFile(ctx, objects...)
 	if err != nil {
 		return nil, err
 	}
@@ -55,10 +59,11 @@ func NewStagedRelease(ctx context.Context, name, prefix string, objects ...*stor
 	}
 
 	return &Staged{
-		name:      name,
-		prefix:    prefix,
-		meta:      *meta,
-		artifacts: artifacts,
+		name:           name,
+		prefix:         prefix,
+		meta:           *meta,
+		metadataSHA256: metadataSHA256,
+		artifacts:      artifacts,
 	}, nil
 }
 
@@ -70,6 +75,12 @@ func (s Staged) Name() string {
 // Metadata will return metadata information about the release.
 func (s Staged) Metadata() Metadata {
 	return s.meta
+}
+
+// MetadataSHA256 returns the hex-encoded SHA-256 digest of the raw metadata.json
+// object that describes this staged release.
+func (s Staged) MetadataSHA256() string {
+	return s.metadataSHA256
 }
 
 // ArtifactsOfKind returns a list of staged artifacts of the type denoted by
@@ -85,7 +96,7 @@ func (s Staged) ArtifactsOfKind(kind string) []StagedArtifact {
 	return objs
 }
 
-func loadReleaseMetadataFile(ctx context.Context, objs ...*storage.ObjectHandle) (*Metadata, error) {
+func loadReleaseMetadataFile(ctx context.Context, objs ...*storage.ObjectHandle) (*Metadata, string, error) {
 	var metadataObj *storage.ObjectHandle
 	for _, f := range objs {
 		if filepath.Base(f.ObjectName()) == MetadataFileName {
@@ -95,21 +106,28 @@ func loadReleaseMetadataFile(ctx context.Context, objs ...*storage.ObjectHandle)
 	}
 
 	if metadataObj == nil {
-		return nil, fmt.Errorf("release metadata not found")
+		return nil, "", fmt.Errorf("release metadata not found")
 	}
 
 	r, err := metadataObj.NewReader(ctx)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer r.Close()
 
-	var m Metadata
-	if err := json.NewDecoder(r).Decode(&m); err != nil {
-		return nil, err
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, "", err
 	}
 
-	return &m, nil
+	var m Metadata
+	if err := json.Unmarshal(body, &m); err != nil {
+		return nil, "", err
+	}
+
+	sum := sha256.Sum256(body)
+
+	return &m, hex.EncodeToString(sum[:]), nil
 }
 
 func crossReferenceArtifactMetadata(meta Metadata, name, prefix string, objs ...*storage.ObjectHandle) ([]StagedArtifact, error) {

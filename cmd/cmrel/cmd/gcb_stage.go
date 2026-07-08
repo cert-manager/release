@@ -306,6 +306,11 @@ func runGCBStage(rootOpts *rootOptions, o *gcbStageOptions) error {
 		return err
 	}
 
+	// Emit the digest of the metadata.json we just uploaded.
+	metaSum := sha256.Sum256(meta)
+	log.Printf("Staged metadata.json sha256: %s", hex.EncodeToString(metaSum[:]))
+	log.Printf("Pass this digest to 'cmrel publish --expected-metadata-sha256=<digest>' to verify the staged release before publishing")
+
 	log.Printf("Successfully staged release with version %q", releaseVersion)
 
 	return nil

@@ -97,6 +97,10 @@ type publishOptions struct {
 	// or else "*" - the default - to mean "all actions"
 	PublishActions []string
 
+	// ExpectedMetadataSHA256, if set, is the hex-encoded SHA-256 digest that the
+	// staged metadata.json must match before the publish job unpacks and publishes the release.
+	ExpectedMetadataSHA256 string
+
 	// SkipSigning, if true, will skip trying to sign artifacts using KMS
 	SkipSigning bool
 
@@ -120,6 +124,7 @@ func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
+	fs.StringVar(&o.ExpectedMetadataSHA256, "expected-metadata-sha256", "", "If set, the hex-encoded SHA-256 digest of the staged metadata.json is verified against this value by the publish job before the release is published. Obtain this value out-of-band from the 'gcb stage' build log to ensure the staged release has not been tampered with.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Order of operations is preserved if given, or is alphabetical by default. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 }
@@ -138,6 +143,7 @@ func (o *publishOptions) print() {
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
+	log.Printf("  ExpectedMetadataSHA256: %q", o.ExpectedMetadataSHA256)
 }
 
 func publishCmd(rootOpts *rootOptions) *cobra.Command {
@@ -213,6 +219,7 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	build.Substitutions["_PUBLISH_ACTIONS"] = strings.Join(o.PublishActions, ",")
 	build.Substitutions["_SKIP_SIGNING"] = fmt.Sprintf("%v", o.SkipSigning)
 	build.Substitutions["_KMS_KEY"] = o.SigningKMSKey
+	build.Substitutions["_EXPECTED_METADATA_SHA256"] = o.ExpectedMetadataSHA256
 
 	log.Printf("DEBUG: building google cloud build API client")
 	svc, err := cloudbuild.NewService(ctx)

@@ -62,6 +62,7 @@ steps:
   - --publish-actions=${_PUBLISH_ACTIONS}
   - --signing-kms-key=${_KMS_KEY}
   - --skip-signing=${_SKIP_SIGNING}
+  - --expected-metadata-sha256=${_EXPECTED_METADATA_SHA256}
   - --cosign-path=/go/bin/cosign
 
 tags:
@@ -83,6 +84,9 @@ substitutions:
   ## Optional/defaulted parameters
   _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"
   _SKIP_SIGNING: "false"
+  ## Out-of-band SHA-256 digest of the staged metadata.json. When set, the
+  ## publish job refuses to publish unless the staged metadata.json matches this value.
+  _EXPECTED_METADATA_SHA256: ""
   _RELEASE_BUCKET: ""
   _NO_MOCK: "false"
   _PUBLISHED_GITHUB_ORG: ""
