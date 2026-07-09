@@ -18,6 +18,7 @@ package zip
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -54,9 +55,17 @@ func writeFileFromZipArchive(dst string, f *zip.File) error {
 
 	defer rc.Close()
 
+	// reject any entry whose name would escape the destination directory
+	// (e.g. "../../go/bin/cosign" or an absolute path).
+	if !filepath.IsLocal(f.Name) {
+		return fmt.Errorf("refusing to extract %q: entry path escapes the destination directory", f.Name)
+	}
+
 	targetFilename := filepath.Join(dst, f.Name)
 
-	outFile, err := os.OpenFile(targetFilename, os.O_CREATE|os.O_RDWR, os.FileMode(f.Mode()))
+	// O_EXCL ensures we never follow into or overwrite an existing file, and we
+	// mask to permission bits so a malicious archive cannot set setuid/setgid/sticky bits.
+	outFile, err := os.OpenFile(targetFilename, os.O_CREATE|os.O_RDWR|os.O_EXCL, f.Mode().Perm())
 	if err != nil {
 		return err
 	}
