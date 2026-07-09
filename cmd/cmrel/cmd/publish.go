@@ -214,6 +214,15 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	build.Substitutions["_SKIP_SIGNING"] = fmt.Sprintf("%v", o.SkipSigning)
 	build.Substitutions["_KMS_KEY"] = o.SigningKMSKey
 
+	// Pin the GCB build to the commit this cmrel binary was built from, rather than
+	// installing cmrel from a mutable ref (e.g. "master") inside the privileged build.
+	repoRef, err := releaseRepoRef()
+	if err != nil {
+		return fmt.Errorf("failed to determine cmrel commit to pin GCB build: %w", err)
+	}
+	log.Printf("Pinning GCB cmrel install to cert-manager/release@%s", repoRef)
+	build.Substitutions["_RELEASE_REPO_REF"] = repoRef
+
 	log.Printf("DEBUG: building google cloud build API client")
 	svc, err := cloudbuild.NewService(ctx)
 	if err != nil {

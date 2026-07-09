@@ -96,7 +96,9 @@ substitutions:
   ## Used as a tag to identify the build more easily later
   _TAG_RELEASE_NAME: ""
   ## Ref for cert-manager/release repo to use when installing cmrel
-  _RELEASE_REPO_REF: "master"
+  ## Must be an immutable commit SHA: cmrel runs here with release secrets and KMS
+  ## signing access, so a mutable ref (e.g. "master") would execute unpinned code.
+  _RELEASE_REPO_REF: "PINNED_CMREL_COMMIT_SHA_REQUIRED"
   ## Version of the cosign tool to install
   _COSIGN_REPO_REF: "v1.13.6"
 

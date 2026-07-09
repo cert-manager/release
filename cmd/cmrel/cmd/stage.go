@@ -217,6 +217,15 @@ func runStage(rootOpts *rootOptions, o *stageOptions) error {
 	build.Substitutions["_TARGET_OSES"] = strings.Join(targetOSes.List(), ",")
 	build.Substitutions["_TARGET_ARCHES"] = strings.Join(targetArches.List(), ",")
 
+	// Pin the GCB build to the commit this cmrel binary was built from, rather than
+	// installing cmrel from a mutable ref (e.g. "master") inside the privileged build.
+	repoRef, err := releaseRepoRef()
+	if err != nil {
+		return fmt.Errorf("failed to determine cmrel commit to pin GCB build: %w", err)
+	}
+	log.Printf("Pinning GCB cmrel install to cert-manager/release@%s", repoRef)
+	build.Substitutions["_RELEASE_REPO_REF"] = repoRef
+
 	outputDir := ""
 	// If --release-version is not explicitly set, we treat this build as a
 	// 'devel' build and output into the development directory.

@@ -27,7 +27,9 @@ substitutions:
   ## Required parameters
   _KMS_KEY: ""
   ## Options controlling the version of the release tooling used in the build.
-  _RELEASE_REPO_REF: "master"
+  ## Must be an immutable commit SHA: cmrel runs here with KMS access to the signing
+  ## key, so a mutable ref (e.g. "master") would execute unpinned code.
+  _RELEASE_REPO_REF: "PINNED_CMREL_COMMIT_SHA_REQUIRED"
 
 # we don't specify a machineType manually because we don't need high CPU at all for this
 # job; the default machine type seems to be the lowest-power and cheapest so we leave it
