@@ -25,7 +25,7 @@ timeout: 2700s # 45m
 steps:
 # cert-manager relies on the git checkout to determine release version, among other things
 # By default, gcb only does a shallow clone, so we need to "unshallow" to get more details
-- name: gcr.io/cloud-builders/git@sha256:aa588cb93f3f75894030d2efb1376712c14ccfc8222a04243a822b4c03051494
+- name: gcr.io/cloud-builders/git@sha256:739e7bda8456932210aaf911d44b8ce91eeca84934b851c340a77efc4dd948ec
   dir: "go/src/github.com/cert-manager/cert-manager"
   entrypoint: bash
   args:
