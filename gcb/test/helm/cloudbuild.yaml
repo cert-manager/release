@@ -29,7 +29,9 @@ steps:
 
 substitutions:
   _RELEASE_REPO_URL: https://github.com/cert-manager/release.git
-  _RELEASE_REPO_REF: "master"
+  ## Must be an immutable commit SHA: tests run here with GITHUB_TOKEN in scope, so a
+  ## mutable ref (e.g. "master") would execute unpinned code.
+  _RELEASE_REPO_REF: "PINNED_CMREL_COMMIT_SHA_REQUIRED"
 
 secrets:
 - kmsKeyName: projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-secret-key
