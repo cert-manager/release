@@ -66,9 +66,7 @@ substitutions:
   _TARGET_OSES: "*"
   _TARGET_ARCHES: "*"
   ## Options controlling the version of the release tooling used in the build.
-  ## Must be an immutable commit SHA: cmrel runs here with release secrets and KMS
-  ## signing access, so a mutable ref (e.g. "master") would execute unpinned code.
-  _RELEASE_REPO_REF: "PINNED_CMREL_COMMIT_SHA_REQUIRED"
+  _RELEASE_REPO_REF: "master"
   ## Used as a tag to identify the build more easily later
   _TAG_RELEASE_BRANCH: ""
 

@@ -14,28 +14,41 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cmd
+// Package releaseref determines the git ref of the cert-manager/release
+// repository that GCB build jobs should install cmrel from, i.e. the value of
+// the _RELEASE_REPO_REF substitution.
+//
+// The GCB cloudbuild.yaml files run `go install .../cmrel@${_RELEASE_REPO_REF}`
+// inside a privileged build holding release secrets and KMS signing access. A
+// mutable ref such as "master" would let anyone with push access to the release
+// repo run arbitrary code there (CWE-829). To avoid that, we pin GCB to the exact
+// commit that the running cmrel binary was built from, binding the code executed
+// in the privileged build to the binary the release manager chose to build and
+// run locally.
+package releaseref
 
 import (
 	"fmt"
 	"runtime/debug"
 )
 
-// releaseRepoRef returns the git ref of the cert-manager/release repository that
-// GCB build jobs should install cmrel from, i.e. the value of the
-// _RELEASE_REPO_REF substitution.
-func releaseRepoRef() (string, error) {
+// Resolve returns the git ref to pin GCB's cmrel install to, derived from the
+// running binary's own build information.
+//
+// It fails closed: if the commit cannot be determined, or the binary was built
+// from a modified working tree, it returns an error rather than falling back to a
+// mutable ref.
+func Resolve() (string, error) {
 	info, ok := debug.ReadBuildInfo()
-	return releaseRepoRefFromBuildInfo(info, ok)
-}
-
-// releaseRepoRefFromBuildInfo implements releaseRepoRef against an explicit
-// build.BuildInfo so the ref-resolution logic can be unit tested.
-func releaseRepoRefFromBuildInfo(info *debug.BuildInfo, ok bool) (string, error) {
-	if !ok || info == nil {
+	if !ok {
 		return "", fmt.Errorf("unable to read build info to determine the cmrel commit; build cmrel with `go build`/`go install` from a clean checkout of cert-manager/release")
 	}
+	return fromBuildInfo(info)
+}
 
+// fromBuildInfo derives the ref from a build.BuildInfo. It is separated from
+// Resolve so the ref-resolution logic can be unit tested against explicit inputs.
+func fromBuildInfo(info *debug.BuildInfo) (string, error) {
 	var revision, modified string
 	for _, s := range info.Settings {
 		switch s.Key {

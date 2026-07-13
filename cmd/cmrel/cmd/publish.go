@@ -29,6 +29,7 @@ import (
 
 	"github.com/cert-manager/release/pkg/gcb"
 	"github.com/cert-manager/release/pkg/release"
+	"github.com/cert-manager/release/pkg/releaseref"
 	"github.com/cert-manager/release/pkg/sign"
 )
 
@@ -104,6 +105,11 @@ type publishOptions struct {
 	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/versions/<KEY_VERSION>
 	// This must be set if SkipSigning is not set to true
 	SigningKMSKey string
+
+	// SkipCmrelPin, if true, leaves _RELEASE_REPO_REF as set in the cloudbuild.yaml
+	// instead of pinning the GCB cmrel install to this binary's commit. Intended for
+	// cmrel development against a pushed dev branch; not safe for real releases.
+	SkipCmrelPin bool
 }
 
 func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
@@ -122,6 +128,7 @@ func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Order of operations is preserved if given, or is alphabetical by default. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
+	fs.BoolVar(&o.SkipCmrelPin, "skip-cmrel-pin", false, "Skip pinning the GCB cmrel install to this binary's commit and use the ref set in the cloudbuild.yaml instead. For cmrel development against a pushed dev branch only; do not use for real releases.")
 }
 
 func (o *publishOptions) print() {
@@ -138,6 +145,7 @@ func (o *publishOptions) print() {
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
+	log.Printf("  SkipCmrelPin: %t", o.SkipCmrelPin)
 }
 
 func publishCmd(rootOpts *rootOptions) *cobra.Command {
@@ -214,14 +222,19 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	build.Substitutions["_SKIP_SIGNING"] = fmt.Sprintf("%v", o.SkipSigning)
 	build.Substitutions["_KMS_KEY"] = o.SigningKMSKey
 
-	// Pin the GCB build to the commit this cmrel binary was built from, rather than
-	// installing cmrel from a mutable ref (e.g. "master") inside the privileged build.
-	repoRef, err := releaseRepoRef()
-	if err != nil {
-		return fmt.Errorf("failed to determine cmrel commit to pin GCB build: %w", err)
+	// By default, pin the GCB build to the commit this cmrel binary was built from,
+	// rather than installing cmrel from a mutable ref (e.g. "master") inside the
+	// privileged build. --skip-cmrel-pin opts out for cmrel development.
+	if o.SkipCmrelPin {
+		log.Printf("WARNING: --skip-cmrel-pin set; GCB will install cmrel from %q as set in %q, not pinned to this binary", build.Substitutions["_RELEASE_REPO_REF"], o.CloudBuildFile)
+	} else {
+		repoRef, err := releaseref.Resolve()
+		if err != nil {
+			return fmt.Errorf("failed to determine cmrel commit to pin GCB build (pass --skip-cmrel-pin to install from the ref in the cloudbuild.yaml instead): %w", err)
+		}
+		log.Printf("Pinning GCB cmrel install to cert-manager/release@%s", repoRef)
+		build.Substitutions["_RELEASE_REPO_REF"] = repoRef
 	}
-	log.Printf("Pinning GCB cmrel install to cert-manager/release@%s", repoRef)
-	build.Substitutions["_RELEASE_REPO_REF"] = repoRef
 
 	log.Printf("DEBUG: building google cloud build API client")
 	svc, err := cloudbuild.NewService(ctx)

@@ -14,32 +14,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cmd
+package releaseref
 
 import (
 	"runtime/debug"
 	"testing"
 )
 
-func TestReleaseRepoRefFromBuildInfo(t *testing.T) {
+func TestFromBuildInfo(t *testing.T) {
 	const commit = "f6da9c76877551ef32503b17189bb178501f59a7"
 
 	tests := []struct {
 		name    string
 		info    *debug.BuildInfo
-		ok      bool
 		want    string
 		wantErr bool
 	}{
 		{
-			name:    "no build info",
-			info:    nil,
-			ok:      false,
-			wantErr: true,
-		},
-		{
 			name: "clean working tree pins to the commit",
-			ok:   true,
 			info: &debug.BuildInfo{Settings: []debug.BuildSetting{
 				{Key: "vcs.revision", Value: commit},
 				{Key: "vcs.modified", Value: "false"},
@@ -48,7 +40,6 @@ func TestReleaseRepoRefFromBuildInfo(t *testing.T) {
 		},
 		{
 			name: "modified working tree fails closed",
-			ok:   true,
 			info: &debug.BuildInfo{Settings: []debug.BuildSetting{
 				{Key: "vcs.revision", Value: commit},
 				{Key: "vcs.modified", Value: "true"},
@@ -57,19 +48,16 @@ func TestReleaseRepoRefFromBuildInfo(t *testing.T) {
 		},
 		{
 			name: "module install pins to the version",
-			ok:   true,
 			info: &debug.BuildInfo{Main: debug.Module{Version: "v0.0.0-20230101000000-" + commit[:12]}},
 			want: "v0.0.0-20230101000000-" + commit[:12],
 		},
 		{
 			name:    "devel build without vcs stamping fails closed",
-			ok:      true,
 			info:    &debug.BuildInfo{Main: debug.Module{Version: "(devel)"}},
 			wantErr: true,
 		},
 		{
 			name:    "no revision and no version fails closed",
-			ok:      true,
 			info:    &debug.BuildInfo{},
 			wantErr: true,
 		},
@@ -77,12 +65,12 @@ func TestReleaseRepoRefFromBuildInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := releaseRepoRefFromBuildInfo(tt.info, tt.ok)
+			got, err := fromBuildInfo(tt.info)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("releaseRepoRefFromBuildInfo() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("fromBuildInfo() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if got != tt.want {
-				t.Errorf("releaseRepoRefFromBuildInfo() = %q, want %q", got, tt.want)
+				t.Errorf("fromBuildInfo() = %q, want %q", got, tt.want)
 			}
 		})
 	}
