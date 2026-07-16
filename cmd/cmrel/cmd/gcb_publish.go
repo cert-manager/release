@@ -19,6 +19,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -100,6 +101,10 @@ type gcbPublishOptions struct {
 
 	// SkipSigning, if true, will skip trying to sign artifacts using KMS
 	SkipSigning bool
+
+	// RequireSignedMetadata, if true, causes publishing to fail unless the
+	// staged metadata.json is accompanied by a valid signature (metadata.json.sig).
+	RequireSignedMetadata bool
 
 	// SigningKMSKey is the full name of the GCP KMS key to be used for signing, e.g.
 	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/versions/<KEY_VERSION>
@@ -188,6 +193,7 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.CosignPath, "cosign-path", "cosign", "Full path to the cosign binary. Defaults to searching in $PATH for a binary called 'cosign'")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
+	fs.BoolVar(&o.RequireSignedMetadata, "require-signed-metadata", false, "Require the staged metadata.json to have a valid signature (metadata.json.sig) verifiable against the signing KMS key before publishing. When false, a missing signature is tolerated with a warning, but a present signature is always verified.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 }
 
@@ -205,6 +211,7 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  CosignPath: %q", o.CosignPath)
 	log.Printf("  SkipSigning: %v", o.SkipSigning)
 	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
+	log.Printf("  RequireSignedMetadata: %v", o.RequireSignedMetadata)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
 }
 
@@ -309,6 +316,11 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 
 	log.Printf("Release with version %q (%s) will be published", staged.Metadata().ReleaseVersion, staged.Metadata().GitCommitRef)
 
+	// Verify the authenticity of the staged metadata.json before trusting anything it describes.
+	if err := verifyStagedMetadata(ctx, o, staged); err != nil {
+		return err
+	}
+
 	rel, err := release.Unpack(ctx, staged)
 	if err != nil {
 		return fmt.Errorf("failed to unpack staged release: %w", err)
@@ -367,6 +379,46 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	log.Printf("+++++++++ Publishing release completed successfully! +++++++++")
 	log.Printf("You MUST now perform the following manual tasks:\n%s", o.ManualActionText())
 
+	return nil
+}
+
+// verifyStagedMetadata verifies the signature over the staged metadata.json.
+func verifyStagedMetadata(ctx context.Context, o *gcbPublishOptions, staged *release.Staged) error {
+	rawSignature := staged.MetadataSignature()
+
+	if len(rawSignature) == 0 {
+		if o.RequireSignedMetadata {
+			return fmt.Errorf("staged release has no %s and --require-signed-metadata is set - refusing to publish", release.MetadataSignatureFileName)
+		}
+		log.Printf("WARNING: staged release has no %s; skipping metadata authenticity verification. "+
+			"Set --require-signed-metadata to enforce it once staging signs metadata.", release.MetadataSignatureFileName)
+		return nil
+	}
+
+	if o.SigningKMSKey == "" {
+		if o.RequireSignedMetadata {
+			return fmt.Errorf("cannot verify staged metadata signature: no signing KMS key is configured")
+		}
+		log.Printf("WARNING: staged metadata signature is present but no signing KMS key is configured; skipping verification")
+		return nil
+	}
+
+	key, err := sign.NewGCPKMSKey(o.SigningKMSKey)
+	if err != nil {
+		return err
+	}
+
+	// The signature is stored base64-encoded (see 'cmrel sign metadata').
+	signature, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(rawSignature)))
+	if err != nil {
+		return fmt.Errorf("failed to decode staged metadata signature: %w", err)
+	}
+
+	if err := sign.VerifyMetadata(ctx, key, staged.MetadataBytes(), signature); err != nil {
+		return fmt.Errorf("staged metadata signature is invalid - refusing to publish: %w", err)
+	}
+
+	log.Printf("Verified staged metadata.json signature against KMS key %q", o.SigningKMSKey)
 	return nil
 }
 

@@ -62,6 +62,7 @@ steps:
   - --publish-actions=${_PUBLISH_ACTIONS}
   - --signing-kms-key=${_KMS_KEY}
   - --skip-signing=${_SKIP_SIGNING}
+  - --require-signed-metadata=${_REQUIRE_SIGNED_METADATA}
   - --cosign-path=/go/bin/cosign
 
 tags:
@@ -83,6 +84,10 @@ substitutions:
   ## Optional/defaulted parameters
   _KMS_KEY: "projects/cert-manager-release/locations/europe-west1/keyRings/cert-manager-release/cryptoKeys/cert-manager-release-signing-key/cryptoKeyVersions/1"
   _SKIP_SIGNING: "false"
+  ## Require the staged metadata.json to carry a valid signature (metadata.json.sig)
+  ## before publishing. Left "false" during roll-out; set to "true" once all
+  ## supported cert-manager branches sign metadata at stage time.
+  _REQUIRE_SIGNED_METADATA: "false"
   _RELEASE_BUCKET: ""
   _NO_MOCK: "false"
   _PUBLISHED_GITHUB_ORG: ""

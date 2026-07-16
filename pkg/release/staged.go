@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -34,6 +35,14 @@ type Staged struct {
 	prefix    string
 	meta      Metadata
 	artifacts []StagedArtifact
+
+	// metadataBytes holds the exact bytes of the metadata.json object that meta
+	// was decoded from. These are the bytes that metadataSignature covers.
+	metadataBytes []byte
+
+	// metadataSignature holds the contents of the metadata.json.sig object,
+	// if one was present alongside the release.
+	metadataSignature []byte
 }
 
 // StagedArtifact represents a single artifact within a release, with some
@@ -44,7 +53,7 @@ type StagedArtifact struct {
 }
 
 func NewStagedRelease(ctx context.Context, name, prefix string, objects ...*storage.ObjectHandle) (*Staged, error) {
-	meta, err := loadReleaseMetadataFile(ctx, objects...)
+	meta, metaBytes, err := loadReleaseMetadataFile(ctx, objects...)
 	if err != nil {
 		return nil, err
 	}
@@ -54,11 +63,19 @@ func NewStagedRelease(ctx context.Context, name, prefix string, objects ...*stor
 		return nil, err
 	}
 
+	// The metadata signature is loaded on a best-effort basis: it may legitimately be absent.
+	metaSignature, err := loadReleaseMetadataSignature(ctx, objects...)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Staged{
-		name:      name,
-		prefix:    prefix,
-		meta:      *meta,
-		artifacts: artifacts,
+		name:              name,
+		prefix:            prefix,
+		meta:              *meta,
+		artifacts:         artifacts,
+		metadataBytes:     metaBytes,
+		metadataSignature: metaSignature,
 	}, nil
 }
 
@@ -70,6 +87,18 @@ func (s Staged) Name() string {
 // Metadata will return metadata information about the release.
 func (s Staged) Metadata() Metadata {
 	return s.meta
+}
+
+// MetadataBytes returns the exact bytes of the metadata.json object this release
+// was loaded from. This is the data covered by MetadataSignature.
+func (s Staged) MetadataBytes() []byte {
+	return s.metadataBytes
+}
+
+// MetadataSignature returns the contents of the metadata.json.sig object staged
+// alongside this release, or nil if no signature was present.
+func (s Staged) MetadataSignature() []byte {
+	return s.metadataSignature
 }
 
 // ArtifactsOfKind returns a list of staged artifacts of the type denoted by
@@ -85,31 +114,58 @@ func (s Staged) ArtifactsOfKind(kind string) []StagedArtifact {
 	return objs
 }
 
-func loadReleaseMetadataFile(ctx context.Context, objs ...*storage.ObjectHandle) (*Metadata, error) {
-	var metadataObj *storage.ObjectHandle
+// loadReleaseMetadataFile locates metadata.json amongst the staged objects,
+// decodes it, and returns both the parsed Metadata and the exact bytes it was decoded from.
+func loadReleaseMetadataFile(ctx context.Context, objs ...*storage.ObjectHandle) (*Metadata, []byte, error) {
+	metadataObj := findObjectByBaseName(MetadataFileName, objs...)
+	if metadataObj == nil {
+		return nil, nil, fmt.Errorf("release metadata not found")
+	}
+
+	body, err := readObject(ctx, metadataObj)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var m Metadata
+	if err := json.Unmarshal(body, &m); err != nil {
+		return nil, nil, err
+	}
+
+	return &m, body, nil
+}
+
+// loadReleaseMetadataSignature locates the metadata.json.sig object amongst the
+// staged objects and returns its contents.
+func loadReleaseMetadataSignature(ctx context.Context, objs ...*storage.ObjectHandle) ([]byte, error) {
+	signatureObj := findObjectByBaseName(MetadataSignatureFileName, objs...)
+	if signatureObj == nil {
+		return nil, nil
+	}
+
+	return readObject(ctx, signatureObj)
+}
+
+// findObjectByBaseName returns the first object whose path has the given base
+// name, or nil if none match.
+func findObjectByBaseName(baseName string, objs ...*storage.ObjectHandle) *storage.ObjectHandle {
 	for _, f := range objs {
-		if filepath.Base(f.ObjectName()) == MetadataFileName {
-			metadataObj = f
-			break
+		if filepath.Base(f.ObjectName()) == baseName {
+			return f
 		}
 	}
+	return nil
+}
 
-	if metadataObj == nil {
-		return nil, fmt.Errorf("release metadata not found")
-	}
-
-	r, err := metadataObj.NewReader(ctx)
+// readObject reads the full contents of a GCS object into memory.
+func readObject(ctx context.Context, obj *storage.ObjectHandle) ([]byte, error) {
+	r, err := obj.NewReader(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer r.Close()
 
-	var m Metadata
-	if err := json.NewDecoder(r).Decode(&m); err != nil {
-		return nil, err
-	}
-
-	return &m, nil
+	return io.ReadAll(r)
 }
 
 func crossReferenceArtifactMetadata(meta Metadata, name, prefix string, objs ...*storage.ObjectHandle) ([]StagedArtifact, error) {

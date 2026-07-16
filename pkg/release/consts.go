@@ -25,6 +25,14 @@ const (
 	// release.
 	MetadataFileName = "metadata.json"
 
+	// MetadataSignatureExtension is the suffix appended to a signed file to name
+	// its detached signature.
+	MetadataSignatureExtension = ".sig"
+
+	// MetadataSignatureFileName is the name of the detached signature for the
+	// release metadata.json file, stored alongside it in the staging bucket.
+	MetadataSignatureFileName = MetadataFileName + MetadataSignatureExtension
+
 	// TarsBazelTarget is the Bazel target used to build release tar files in
 	// the cert-manager repository.
 	TarsBazelTarget = "//build/release-tars"
