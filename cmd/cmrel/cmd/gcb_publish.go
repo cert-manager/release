@@ -19,7 +19,6 @@ package cmd
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -382,11 +381,23 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	return nil
 }
 
-// verifyStagedMetadata verifies the signature over the staged metadata.json.
+// verifyStagedMetadata verifies, using cosign, the detached signature over the
+// staged metadata.json.
+//
+// metadata.json is the root of trust for the publish step, yet it is read from
+// the same bucket prefix that the release artifacts are written to. Signing it
+// at stage time with the KMS key (which bucket writers do not have) and
+// verifying that signature here binds a published release to metadata genuinely
+// produced by the staging pipeline, regardless of who can write to the bucket.
+//
+// During roll-out (before all supported cert-manager branches emit a signature)
+// a missing signature is tolerated with a warning unless --require-signed-metadata
+// is set. A signature that IS present is always verified, and an invalid one
+// always fails the publish.
 func verifyStagedMetadata(ctx context.Context, o *gcbPublishOptions, staged *release.Staged) error {
-	rawSignature := staged.MetadataSignature()
+	signature := staged.MetadataSignature()
 
-	if len(rawSignature) == 0 {
+	if len(signature) == 0 {
 		if o.RequireSignedMetadata {
 			return fmt.Errorf("staged release has no %s and --require-signed-metadata is set - refusing to publish", release.MetadataSignatureFileName)
 		}
@@ -408,13 +419,26 @@ func verifyStagedMetadata(ctx context.Context, o *gcbPublishOptions, staged *rel
 		return err
 	}
 
-	// The signature is stored base64-encoded (see 'cmrel sign metadata').
-	signature, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(rawSignature)))
+	// cosign verify-blob reads the blob and its signature from disk, so write the
+	// staged metadata and signature (which are already held in memory) to a
+	// temporary directory to hand to cosign.
+	dir, err := os.MkdirTemp("", "cmrel-verify-metadata-")
 	if err != nil {
-		return fmt.Errorf("failed to decode staged metadata signature: %w", err)
+		return err
+	}
+	defer os.RemoveAll(dir)
+
+	blobPath := filepath.Join(dir, release.MetadataFileName)
+	if err := os.WriteFile(blobPath, staged.MetadataBytes(), 0o644); err != nil {
+		return err
 	}
 
-	if err := sign.VerifyMetadata(ctx, key, staged.MetadataBytes(), signature); err != nil {
+	signaturePath := filepath.Join(dir, release.MetadataSignatureFileName)
+	if err := os.WriteFile(signaturePath, signature, 0o644); err != nil {
+		return err
+	}
+
+	if err := cosign.VerifyBlob(ctx, o.CosignPath, blobPath, signaturePath, key); err != nil {
 		return fmt.Errorf("staged metadata signature is invalid - refusing to publish: %w", err)
 	}
 

@@ -18,23 +18,22 @@ package cmd
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 
 	"github.com/cert-manager/release/pkg/release"
 	"github.com/cert-manager/release/pkg/sign"
+	"github.com/cert-manager/release/pkg/sign/cosign"
 )
 
 const (
 	signMetadataCommand         = "metadata"
 	signMetadataDescription     = "Sign a staged release metadata.json file using a GCP KMS key"
-	signMetadataLongDescription = `The metadata command signs a release metadata.json file using a GCP KMS
-key, writing a detached signature to metadata.json.sig alongside it.
+	signMetadataLongDescription = `The metadata command signs a release metadata.json file using cosign and a
+GCP KMS key, writing a detached signature to metadata.json.sig alongside it.
 
 metadata.json is the root of trust for the publish step: it lists the release
 artifacts and their checksums. It is read from the same staging bucket that the
@@ -59,19 +58,24 @@ type signMetadataOptions struct {
 
 	// Path is the path to the metadata.json file to sign.
 	Path string
+
+	// CosignPath points to the location of the cosign binary.
+	CosignPath string
 }
 
 func (o *signMetadataOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Key, "key", "", "Full name of the GCP KMS key to use for signing")
 	fs.StringVar(&o.Path, "path", "", "Path to the metadata.json file to sign")
+	fs.StringVar(&o.CosignPath, "cosign-path", "cosign", "Full path to the cosign binary. Defaults to searching in $PATH for a binary called 'cosign'")
 	markRequired("key")
 	markRequired("path")
 }
 
 func (o *signMetadataOptions) print() {
 	log.Printf("sign metadata options:")
-	log.Printf("   Key: %q", o.Key)
-	log.Printf("  Path: %q", o.Path)
+	log.Printf("         Key: %q", o.Key)
+	log.Printf("        Path: %q", o.Path)
+	log.Printf("  CosignPath: %q", o.CosignPath)
 }
 
 func signMetadataCmd(rootOpts *rootOptions) *cobra.Command {
@@ -104,26 +108,12 @@ func runSignMetadata(rootOpts *rootOptions, o *signMetadataOptions) error {
 		return err
 	}
 
-	metadata, err := os.ReadFile(o.Path)
-	if err != nil {
-		return fmt.Errorf("failed to read metadata file %q: %w", o.Path, err)
-	}
-
-	signature, err := sign.SignMetadata(ctx, parsedKey, metadata)
-	if err != nil {
+	signaturePath := o.Path + release.MetadataSignatureExtension
+	if err := cosign.SignBlob(ctx, o.CosignPath, o.Path, signaturePath, parsedKey); err != nil {
 		return fmt.Errorf("failed to sign metadata file %q: %w", o.Path, err)
 	}
 
-	// The signature is base64-encoded so that it is safe to move around as a
-	// text file (e.g. through make, gsutil) without any risk of byte mangling.
-	encoded := base64.StdEncoding.EncodeToString(signature)
-
-	sigPath := o.Path + release.MetadataSignatureExtension
-	if err := os.WriteFile(sigPath, []byte(encoded), 0o644); err != nil {
-		return fmt.Errorf("failed to write signature file %q: %w", sigPath, err)
-	}
-
-	log.Printf("wrote metadata signature successfully to %q", sigPath)
+	log.Printf("wrote metadata signature successfully to %q", signaturePath)
 
 	return nil
 }
