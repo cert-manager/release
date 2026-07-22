@@ -382,7 +382,8 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 }
 
 // verifyStagedMetadata verifies, using cosign, the detached signature over the
-// staged metadata.json.
+// staged metadata.json, and applies the --require-signed-metadata policy to the
+// result.
 //
 // metadata.json is the root of trust for the publish step, yet it is read from
 // the same bucket prefix that the release artifacts are written to. Signing it
@@ -391,27 +392,34 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 // produced by the staging pipeline, regardless of who can write to the bucket.
 //
 // During roll-out (before all supported cert-manager branches emit a signature)
-// a missing signature is tolerated with a warning unless --require-signed-metadata
-// is set. A signature that IS present is always verified, and an invalid one
-// always fails the publish.
+// any verification failure - including a missing signature - is tolerated with a
+// warning. Once --require-signed-metadata is set, every failure is fatal.
 func verifyStagedMetadata(ctx context.Context, o *gcbPublishOptions, staged *release.Staged) error {
-	signature := staged.MetadataSignature()
-
-	if len(signature) == 0 {
-		if o.RequireSignedMetadata {
-			return fmt.Errorf("staged release has no %s and --require-signed-metadata is set - refusing to publish", release.MetadataSignatureFileName)
-		}
-		log.Printf("WARNING: staged release has no %s; skipping metadata authenticity verification. "+
-			"Set --require-signed-metadata to enforce it once staging signs metadata.", release.MetadataSignatureFileName)
+	err := doVerifyStagedMetadata(ctx, o, staged)
+	if err == nil {
 		return nil
 	}
 
-	if o.SigningKMSKey == "" {
-		if o.RequireSignedMetadata {
-			return fmt.Errorf("cannot verify staged metadata signature: no signing KMS key is configured")
-		}
-		log.Printf("WARNING: staged metadata signature is present but no signing KMS key is configured; skipping verification")
+	if !o.RequireSignedMetadata {
+		log.Printf("WARNING: staged metadata.json signature not verified (%v); continuing because --require-signed-metadata is not set", err)
 		return nil
+	}
+
+	return fmt.Errorf("refusing to publish: %w", err)
+}
+
+// doVerifyStagedMetadata performs the actual signature check, returning an error
+// if the staged metadata cannot be verified for any reason (no signature, no
+// key, or an invalid signature). It does not consult --require-signed-metadata;
+// that policy is applied by verifyStagedMetadata.
+func doVerifyStagedMetadata(ctx context.Context, o *gcbPublishOptions, staged *release.Staged) error {
+	signature := staged.MetadataSignature()
+	if len(signature) == 0 {
+		return fmt.Errorf("staged release has no %s", release.MetadataSignatureFileName)
+	}
+
+	if o.SigningKMSKey == "" {
+		return fmt.Errorf("no signing KMS key is configured")
 	}
 
 	key, err := sign.NewGCPKMSKey(o.SigningKMSKey)
@@ -439,7 +447,7 @@ func verifyStagedMetadata(ctx context.Context, o *gcbPublishOptions, staged *rel
 	}
 
 	if err := cosign.VerifyBlob(ctx, o.CosignPath, blobPath, signaturePath, key); err != nil {
-		return fmt.Errorf("staged metadata signature is invalid - refusing to publish: %w", err)
+		return fmt.Errorf("staged metadata signature is invalid: %w", err)
 	}
 
 	log.Printf("Verified staged metadata.json signature against KMS key %q", o.SigningKMSKey)

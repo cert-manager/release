@@ -34,28 +34,11 @@ func Sign(ctx context.Context, cosignPath string, containers []string, key sign.
 	return shell.Command(ctx, "", cosignPath, args...)
 }
 
-// SignBlob calls out to cosign to sign the file at blobPath using the provided
-// GCP KMS key, writing the resulting detached signature to signaturePath.
-func SignBlob(ctx context.Context, cosignPath, blobPath, signaturePath string, key sign.GCPKMSKey) error {
-	return shell.Command(ctx, "", cosignPath, signBlobArgs(key, blobPath, signaturePath)...)
-}
-
 // VerifyBlob calls out to cosign to verify that the detached signature at
 // signaturePath is a valid signature of the file at blobPath, made with the
 // provided GCP KMS key. It returns a non-nil error if verification fails.
 func VerifyBlob(ctx context.Context, cosignPath, blobPath, signaturePath string, key sign.GCPKMSKey) error {
 	return shell.Command(ctx, "", cosignPath, verifyBlobArgs(key, blobPath, signaturePath)...)
-}
-
-func signBlobArgs(key sign.GCPKMSKey, blobPath, signaturePath string) []string {
-	return []string{
-		"sign-blob",
-		"--key",
-		key.CosignFormat(),
-		"--output-signature",
-		signaturePath,
-		blobPath,
-	}
 }
 
 func verifyBlobArgs(key sign.GCPKMSKey, blobPath, signaturePath string) []string {

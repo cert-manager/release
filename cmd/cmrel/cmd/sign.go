@@ -55,7 +55,6 @@ func signCmd(o *rootOptions) *cobra.Command {
 
 	cmd.AddCommand(signHelmCmd(o))
 	cmd.AddCommand(signManifestsCmd(o))
-	cmd.AddCommand(signMetadataCmd(o))
 
 	return cmd
 }

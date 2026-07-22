@@ -34,21 +34,6 @@ func testKey(t *testing.T) sign.GCPKMSKey {
 	return key
 }
 
-func TestSignBlobArgs(t *testing.T) {
-	got := signBlobArgs(testKey(t), "/tmp/metadata.json", "/tmp/metadata.json.sig")
-	want := []string{
-		"sign-blob",
-		"--key",
-		"gcpkms://projects/proj/locations/loc/keyRings/ring/cryptoKeys/key/versions/1",
-		"--output-signature",
-		"/tmp/metadata.json.sig",
-		"/tmp/metadata.json",
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("signBlobArgs() = %v, want %v", got, want)
-	}
-}
-
 func TestVerifyBlobArgs(t *testing.T) {
 	got := verifyBlobArgs(testKey(t), "/tmp/metadata.json", "/tmp/metadata.json.sig")
 	want := []string{
