@@ -35,14 +35,6 @@ type Staged struct {
 	prefix    string
 	meta      Metadata
 	artifacts []StagedArtifact
-
-	// metadataBytes holds the exact bytes of the metadata.json object that meta
-	// was decoded from. These are the bytes that metadataSignature covers.
-	metadataBytes []byte
-
-	// metadataSignature holds the contents of the metadata.json.sig object,
-	// if one was present alongside the release.
-	metadataSignature []byte
 }
 
 // StagedArtifact represents a single artifact within a release, with some
@@ -52,10 +44,29 @@ type StagedArtifact struct {
 	ObjectHandle *storage.ObjectHandle
 }
 
-func NewStagedRelease(ctx context.Context, name, prefix string, objects ...*storage.ObjectHandle) (*Staged, error) {
+// MetadataVerifier verifies that the raw metadata.json bytes are authentic,
+// given the detached signature bytes read from alongside them.
+type MetadataVerifier func(ctx context.Context, metadata, signature []byte) error
+
+// NewStagedRelease loads and returns a staged release from the given GCS objects.
+func NewStagedRelease(ctx context.Context, name, prefix string, verify MetadataVerifier, objects ...*storage.ObjectHandle) (*Staged, error) {
 	meta, metaBytes, err := loadReleaseMetadataFile(ctx, objects...)
 	if err != nil {
 		return nil, err
+	}
+
+	if verify != nil {
+		// The signature is loaded on a best-effort basis: it may legitimately be
+		// absent, in which case verify is handed an empty signature and decides
+		// what to do about it.
+		signature, err := loadReleaseMetadataSignature(ctx, objects...)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := verify(ctx, metaBytes, signature); err != nil {
+			return nil, err
+		}
 	}
 
 	artifacts, err := crossReferenceArtifactMetadata(*meta, name, prefix, objects...)
@@ -63,19 +74,11 @@ func NewStagedRelease(ctx context.Context, name, prefix string, objects ...*stor
 		return nil, err
 	}
 
-	// The metadata signature is loaded on a best-effort basis: it may legitimately be absent.
-	metaSignature, err := loadReleaseMetadataSignature(ctx, objects...)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Staged{
-		name:              name,
-		prefix:            prefix,
-		meta:              *meta,
-		artifacts:         artifacts,
-		metadataBytes:     metaBytes,
-		metadataSignature: metaSignature,
+		name:      name,
+		prefix:    prefix,
+		meta:      *meta,
+		artifacts: artifacts,
 	}, nil
 }
 
@@ -87,18 +90,6 @@ func (s Staged) Name() string {
 // Metadata will return metadata information about the release.
 func (s Staged) Metadata() Metadata {
 	return s.meta
-}
-
-// MetadataBytes returns the exact bytes of the metadata.json object this release
-// was loaded from. This is the data covered by MetadataSignature.
-func (s Staged) MetadataBytes() []byte {
-	return s.metadataBytes
-}
-
-// MetadataSignature returns the contents of the metadata.json.sig object staged
-// alongside this release, or nil if no signature was present.
-func (s Staged) MetadataSignature() []byte {
-	return s.metadataSignature
 }
 
 // ArtifactsOfKind returns a list of staged artifacts of the type denoted by
