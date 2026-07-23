@@ -106,6 +106,12 @@ type publishOptions struct {
 	// This must be set if SkipSigning is not set to true
 	SigningKMSKey string
 
+	// AllowInvalidMetadataSignature, if true, lets the publish job proceed when
+	// the staged metadata.json signature is missing or invalid, instead of
+	// failing. It is plumbed through to the 'gcb publish' step and is intended
+	// only for the roll-out period before staging signs metadata.json.
+	AllowInvalidMetadataSignature bool
+
 	// SkipCmrelPin, if true, leaves _RELEASE_REPO_REF as set in the cloudbuild.yaml
 	// instead of pinning the GCB cmrel install to this binary's commit. Intended for
 	// cmrel development against a pushed dev branch; not safe for real releases.
@@ -127,6 +133,7 @@ func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
+	fs.BoolVar(&o.AllowInvalidMetadataSignature, "allow-invalid-metadata-signature", false, "Let the publish job proceed when the staged metadata.json signature is missing or invalid, instead of failing. Intended only for the roll-out period before staging signs metadata.json.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Order of operations is preserved if given, or is alphabetical by default. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 	fs.BoolVar(&o.SkipCmrelPin, "skip-cmrel-pin", false, "Skip pinning the GCB cmrel install to this binary's commit and use the ref set in the cloudbuild.yaml instead. For cmrel development against a pushed dev branch only; do not use for real releases.")
 }
@@ -145,6 +152,7 @@ func (o *publishOptions) print() {
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
+	log.Printf("  AllowInvalidMetadataSignature: %t", o.AllowInvalidMetadataSignature)
 	log.Printf("  SkipCmrelPin: %t", o.SkipCmrelPin)
 }
 
@@ -183,7 +191,10 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	}
 
 	bucket := release.NewBucket(gcs.Bucket(o.Bucket), release.DefaultBucketPathPrefix, release.BuildTypeRelease)
-	rel, err := bucket.GetRelease(ctx, o.ReleaseName)
+	// This is the operator side: it only reads the metadata to log the release
+	// version and to submit the GCB job. The authenticity check is performed by
+	// the 'gcb publish' step running inside GCB, so verification is skipped here.
+	rel, err := bucket.GetRelease(ctx, o.ReleaseName, nil)
 	if err != nil {
 		return fmt.Errorf("failed to fetch release: %w", err)
 	}
@@ -221,6 +232,7 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	build.Substitutions["_PUBLISH_ACTIONS"] = strings.Join(o.PublishActions, ",")
 	build.Substitutions["_SKIP_SIGNING"] = fmt.Sprintf("%v", o.SkipSigning)
 	build.Substitutions["_KMS_KEY"] = o.SigningKMSKey
+	build.Substitutions["_ALLOW_INVALID_METADATA_SIGNATURE"] = fmt.Sprintf("%v", o.AllowInvalidMetadataSignature)
 
 	// By default, pin the GCB build to the commit this cmrel binary was built from,
 	// rather than installing cmrel from a mutable ref (e.g. "master") inside the

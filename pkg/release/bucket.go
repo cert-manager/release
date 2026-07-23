@@ -38,7 +38,7 @@ func NewBucket(bucket *storage.BucketHandle, prefix, releaseType string) *Bucket
 // GetRelease will fetch a single release from the bucket with the given name.
 // A release's name is the name of the directory the metadata.json file for is
 // the release is contained within.
-func (b *Bucket) GetRelease(ctx context.Context, name string) (*Staged, error) {
+func (b *Bucket) GetRelease(ctx context.Context, name string, verify MetadataVerifier) (*Staged, error) {
 	queryPath := b.prefix + name + "/"
 	stagedReleases := map[string][]*storage.ObjectHandle{}
 	objs := b.bucket.Objects(ctx, &storage.Query{Prefix: queryPath})
@@ -59,7 +59,7 @@ func (b *Bucket) GetRelease(ctx context.Context, name string) (*Staged, error) {
 	}
 	// iterate over the map. There is at most one element so return in the loop
 	for name, objs := range stagedReleases {
-		rel, err := NewStagedRelease(ctx, name, b.prefix, objs...)
+		rel, err := NewStagedRelease(ctx, name, b.prefix, verify, objs...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load staged release: %w", err)
 		}
@@ -91,7 +91,9 @@ func (b *Bucket) ListReleases(ctx context.Context, version, gitRef string) ([]St
 	}
 	var staged []Staged
 	for name, objs := range stagedReleases {
-		rel, err := NewStagedRelease(ctx, name, b.prefix, objs...)
+		// Listing does not authenticate metadata: it is informational only and
+		// must not require a KMS key or cosign to enumerate releases.
+		rel, err := NewStagedRelease(ctx, name, b.prefix, nil, objs...)
 		if err != nil {
 			log.Printf("failed to load staged release: %v", err)
 			continue

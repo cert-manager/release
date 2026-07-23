@@ -101,6 +101,13 @@ type gcbPublishOptions struct {
 	// SkipSigning, if true, will skip trying to sign artifacts using KMS
 	SkipSigning bool
 
+	// AllowInvalidMetadataSignature, if true, downgrades a failure to verify the
+	// staged metadata.json signature (including a missing signature) from a fatal
+	// error to a warning. It defaults to false so that verification is enforced
+	// unless explicitly opted out of; it exists to allow publishing unsigned
+	// releases during the roll-out, before staging signs metadata.json.
+	AllowInvalidMetadataSignature bool
+
 	// SigningKMSKey is the full name of the GCP KMS key to be used for signing, e.g.
 	// projects/<PROJECT_NAME>/locations/<LOCATION>/keyRings/<KEYRING_NAME>/cryptoKeys/<KEY_NAME>/versions/<KEY_VERSION>
 	// This must be set if SkipSigning is not set to true
@@ -188,6 +195,7 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.CosignPath, "cosign-path", "cosign", "Full path to the cosign binary. Defaults to searching in $PATH for a binary called 'cosign'")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
+	fs.BoolVar(&o.AllowInvalidMetadataSignature, "allow-invalid-metadata-signature", false, "Downgrade staged metadata.json signature verification failures (including a missing signature) from an error to a warning instead of refusing to publish. Intended only for the roll-out period before staging signs metadata.json.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
 }
 
@@ -205,6 +213,7 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  CosignPath: %q", o.CosignPath)
 	log.Printf("  SkipSigning: %v", o.SkipSigning)
 	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
+	log.Printf("  AllowInvalidMetadataSignature: %v", o.AllowInvalidMetadataSignature)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
 }
 
@@ -302,7 +311,10 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 
 	bucket := release.NewBucket(gcs.Bucket(o.Bucket), release.DefaultBucketPathPrefix, release.BuildTypeRelease)
 
-	staged, err := bucket.GetRelease(ctx, o.ReleaseName)
+	// The staged metadata.json is authenticated as it is loaded (see
+	// verifyStagedMetadata); GetRelease fails if the release cannot be trusted, so
+	// everything derived from staged below is safe to act on.
+	staged, err := bucket.GetRelease(ctx, o.ReleaseName, o.verifyStagedMetadata)
 	if err != nil {
 		return fmt.Errorf("failed to fetch release: %w", err)
 	}
@@ -367,6 +379,80 @@ func runGCBPublish(rootOpts *rootOptions, o *gcbPublishOptions) error {
 	log.Printf("+++++++++ Publishing release completed successfully! +++++++++")
 	log.Printf("You MUST now perform the following manual tasks:\n%s", o.ManualActionText())
 
+	return nil
+}
+
+// verifyStagedMetadata is a release.MetadataVerifier: it verifies, using cosign,
+// the detached signature over the staged metadata.json and applies the
+// --allow-invalid-metadata-signature policy to the result. It is passed to
+// GetRelease so verification happens as the release is loaded, before anything
+// derived from the metadata is used.
+//
+// metadata.json is the root of trust for the publish step, yet it is read from
+// the same bucket prefix that the release artifacts are written to. Signing it
+// at stage time with the KMS key (which bucket writers do not have) and
+// verifying that signature here binds a published release to metadata genuinely
+// produced by the staging pipeline, regardless of who can write to the bucket.
+//
+// By default any verification failure - including a missing signature - is
+// fatal. --allow-invalid-metadata-signature downgrades it to a warning, for use
+// during the roll-out before staging signs metadata.json.
+func (o *gcbPublishOptions) verifyStagedMetadata(ctx context.Context, metadata, signature []byte) error {
+	err := o.doVerifyStagedMetadata(ctx, metadata, signature)
+	if err == nil {
+		return nil
+	}
+
+	if o.AllowInvalidMetadataSignature {
+		log.Printf("WARNING: staged metadata.json signature not verified (%v); continuing because --allow-invalid-metadata-signature is set", err)
+		return nil
+	}
+
+	return fmt.Errorf("refusing to publish: %w", err)
+}
+
+// doVerifyStagedMetadata performs the actual signature check, returning an error
+// if the staged metadata cannot be verified for any reason (no signature, no
+// key, or an invalid signature). It does not consult
+// --allow-invalid-metadata-signature; that policy is applied by
+// verifyStagedMetadata.
+func (o *gcbPublishOptions) doVerifyStagedMetadata(ctx context.Context, metadata, signature []byte) error {
+	if len(signature) == 0 {
+		return fmt.Errorf("staged release has no %s", release.MetadataSignatureFileName)
+	}
+
+	if o.SigningKMSKey == "" {
+		return fmt.Errorf("no signing KMS key is configured")
+	}
+
+	key, err := sign.NewGCPKMSKey(o.SigningKMSKey)
+	if err != nil {
+		return err
+	}
+
+	// cosign verify-blob reads the blob and its signature from disk, so write the
+	// metadata and signature to a temporary directory to hand to cosign.
+	dir, err := os.MkdirTemp("", "cmrel-verify-metadata-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+
+	blobPath := filepath.Join(dir, release.MetadataFileName)
+	if err := os.WriteFile(blobPath, metadata, 0o644); err != nil {
+		return err
+	}
+
+	signaturePath := filepath.Join(dir, release.MetadataSignatureFileName)
+	if err := os.WriteFile(signaturePath, signature, 0o644); err != nil {
+		return err
+	}
+
+	if err := cosign.VerifyBlob(ctx, o.CosignPath, blobPath, signaturePath, key); err != nil {
+		return fmt.Errorf("staged metadata signature is invalid: %w", err)
+	}
+
+	log.Printf("Verified staged metadata.json signature against KMS key %q", o.SigningKMSKey)
 	return nil
 }
 
