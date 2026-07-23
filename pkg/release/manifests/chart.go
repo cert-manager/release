@@ -98,6 +98,10 @@ func (c *Chart) ProvPath() *string {
 	return c.provPath
 }
 
+func (c *Chart) Name() string {
+	return c.meta.Name
+}
+
 func (c *Chart) Version() string {
 	return c.meta.Version
 }
