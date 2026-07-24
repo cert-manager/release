@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -43,10 +44,29 @@ type StagedArtifact struct {
 	ObjectHandle *storage.ObjectHandle
 }
 
-func NewStagedRelease(ctx context.Context, name, prefix string, objects ...*storage.ObjectHandle) (*Staged, error) {
-	meta, err := loadReleaseMetadataFile(ctx, objects...)
+// MetadataVerifier verifies that the raw metadata.json bytes are authentic,
+// given the detached signature bytes read from alongside them.
+type MetadataVerifier func(ctx context.Context, metadata, signature []byte) error
+
+// NewStagedRelease loads and returns a staged release from the given GCS objects.
+func NewStagedRelease(ctx context.Context, name, prefix string, verify MetadataVerifier, objects ...*storage.ObjectHandle) (*Staged, error) {
+	meta, metaBytes, err := loadReleaseMetadataFile(ctx, objects...)
 	if err != nil {
 		return nil, err
+	}
+
+	if verify != nil {
+		// The signature is loaded on a best-effort basis: it may legitimately be
+		// absent, in which case verify is handed an empty signature and decides
+		// what to do about it.
+		signature, err := loadReleaseMetadataSignature(ctx, objects...)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := verify(ctx, metaBytes, signature); err != nil {
+			return nil, err
+		}
 	}
 
 	artifacts, err := crossReferenceArtifactMetadata(*meta, name, prefix, objects...)
@@ -85,31 +105,58 @@ func (s Staged) ArtifactsOfKind(kind string) []StagedArtifact {
 	return objs
 }
 
-func loadReleaseMetadataFile(ctx context.Context, objs ...*storage.ObjectHandle) (*Metadata, error) {
-	var metadataObj *storage.ObjectHandle
+// loadReleaseMetadataFile locates metadata.json amongst the staged objects,
+// decodes it, and returns both the parsed Metadata and the exact bytes it was decoded from.
+func loadReleaseMetadataFile(ctx context.Context, objs ...*storage.ObjectHandle) (*Metadata, []byte, error) {
+	metadataObj := findObjectByBaseName(MetadataFileName, objs...)
+	if metadataObj == nil {
+		return nil, nil, fmt.Errorf("release metadata not found")
+	}
+
+	body, err := readObject(ctx, metadataObj)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var m Metadata
+	if err := json.Unmarshal(body, &m); err != nil {
+		return nil, nil, err
+	}
+
+	return &m, body, nil
+}
+
+// loadReleaseMetadataSignature locates the metadata.json.sig object amongst the
+// staged objects and returns its contents.
+func loadReleaseMetadataSignature(ctx context.Context, objs ...*storage.ObjectHandle) ([]byte, error) {
+	signatureObj := findObjectByBaseName(MetadataSignatureFileName, objs...)
+	if signatureObj == nil {
+		return nil, nil
+	}
+
+	return readObject(ctx, signatureObj)
+}
+
+// findObjectByBaseName returns the first object whose path has the given base
+// name, or nil if none match.
+func findObjectByBaseName(baseName string, objs ...*storage.ObjectHandle) *storage.ObjectHandle {
 	for _, f := range objs {
-		if filepath.Base(f.ObjectName()) == MetadataFileName {
-			metadataObj = f
-			break
+		if filepath.Base(f.ObjectName()) == baseName {
+			return f
 		}
 	}
+	return nil
+}
 
-	if metadataObj == nil {
-		return nil, fmt.Errorf("release metadata not found")
-	}
-
-	r, err := metadataObj.NewReader(ctx)
+// readObject reads the full contents of a GCS object into memory.
+func readObject(ctx context.Context, obj *storage.ObjectHandle) ([]byte, error) {
+	r, err := obj.NewReader(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer r.Close()
 
-	var m Metadata
-	if err := json.NewDecoder(r).Decode(&m); err != nil {
-		return nil, err
-	}
-
-	return &m, nil
+	return io.ReadAll(r)
 }
 
 func crossReferenceArtifactMetadata(meta Metadata, name, prefix string, objs ...*storage.ObjectHandle) ([]StagedArtifact, error) {

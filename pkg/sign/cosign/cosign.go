@@ -34,6 +34,24 @@ func Sign(ctx context.Context, cosignPath string, containers []string, key sign.
 	return shell.Command(ctx, "", cosignPath, args...)
 }
 
+// VerifyBlob calls out to cosign to verify that the detached signature at
+// signaturePath is a valid signature of the file at blobPath, made with the
+// provided GCP KMS key. It returns a non-nil error if verification fails.
+func VerifyBlob(ctx context.Context, cosignPath, blobPath, signaturePath string, key sign.GCPKMSKey) error {
+	return shell.Command(ctx, "", cosignPath, verifyBlobArgs(key, blobPath, signaturePath)...)
+}
+
+func verifyBlobArgs(key sign.GCPKMSKey, blobPath, signaturePath string) []string {
+	return []string{
+		"verify-blob",
+		"--key",
+		key.CosignFormat(),
+		"--signature",
+		signaturePath,
+		blobPath,
+	}
+}
+
 // Version calls "cosign version", both for informational purposes and as a check that the binary exists
 func Version(ctx context.Context, cosignPath string) error {
 	return shell.Command(ctx, "", cosignPath, []string{"version"}...)
