@@ -16,7 +16,7 @@ require (
 	google.golang.org/api v0.287.1
 	helm.sh/helm/v4 v4.2.3
 	k8s.io/apimachinery v0.36.3
-	k8s.io/utils v0.0.0-20260626114624-be93311217bd
+	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/yaml v1.6.0
 )
 
