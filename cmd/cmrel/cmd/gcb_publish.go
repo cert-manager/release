@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/cenkalti/backoff/v5"
+	"github.com/cenkalti/backoff/v7"
 	"github.com/google/go-github/v35/github"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
