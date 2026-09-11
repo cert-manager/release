@@ -41,12 +41,15 @@ func LoadBuild(filename string) (*cloudbuild.Build, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseBuild(f)
+}
 
+// ParseBuild decodes cloudbuild.yaml contents into a cloudbuild.Build.
+func ParseBuild(data []byte) (*cloudbuild.Build, error) {
 	cb := cloudbuild.Build{}
-	if err := yaml.UnmarshalStrict(f, &cb); err != nil {
+	if err := yaml.UnmarshalStrict(data, &cb); err != nil {
 		return nil, err
 	}
-
 	return &cb, nil
 }
 
