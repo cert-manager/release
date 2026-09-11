@@ -175,7 +175,14 @@ func IsClientOS(os string) bool {
 }
 
 // Cmctl is only shipped with v1.14.X and below.
+// Returns false (rather than panicking) when releaseVersion is not a parseable
+// semver — callers in the validation path can legitimately reach this with an
+// already-invalid version they are about to report a violation for.
 func CmctlIsShipped(releaseVersion string) bool {
 	releaseVersion, _ = strings.CutPrefix(releaseVersion, "v")
-	return semver.MustParse(releaseVersion).LT(semver.MustParse("1.15.0-alpha.0"))
+	parsed, err := semver.Parse(releaseVersion)
+	if err != nil {
+		return false
+	}
+	return parsed.LT(semver.MustParse("1.15.0-alpha.0"))
 }
