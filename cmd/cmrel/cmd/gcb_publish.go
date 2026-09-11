@@ -33,6 +33,7 @@ import (
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"golang.org/x/oauth2"
+	"google.golang.org/api/idtoken"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 
@@ -55,8 +56,13 @@ Quay.io, GitHub releases and the Helm chart repostory).
 
 It requires Docker to be installed and available.
 
-The GitHub token to use to create the draft release should be set using the
-GITHUB_TOKEN environment variable.
+The GitHub token used to create the draft release and the Helm chart PR comes
+from the GITHUB_TOKEN environment variable if set. Otherwise, when
+--octo-sts-identity is set, a short-lived token is minted per repository by
+exchanging the Google ID token of the build's service account with octo-sts
+(https://github.com/octo-sts/app). Each target repository must then contain a
+.github/chainguard/<identity>.sts.yaml trust policy that admits the service
+account.
 `
 )
 
@@ -116,6 +122,16 @@ type gcbPublishOptions struct {
 	// PublishActions list of publishing actions to take
 	PublishActions []string
 
+	// OctoSTSIdentity is the name of the octo-sts trust policy
+	// (.github/chainguard/<OctoSTSIdentity>.sts.yaml) in each target GitHub
+	// repository. When set and GITHUB_TOKEN is empty, GitHub tokens are minted
+	// by exchanging the build service account's Google ID token with octo-sts.
+	OctoSTSIdentity string
+
+	// OctoSTSDomain is the octo-sts service to exchange tokens with. It is also
+	// the audience of the Google ID token, which octo-sts checks by default.
+	OctoSTSDomain string
+
 	// CosignPath points to the location of the cosign binary
 	CosignPath string
 
@@ -163,14 +179,24 @@ func (o *gcbPublishOptions) PublishActionList() ([]publishAction, error) {
 	return actionFuncs, nil
 }
 
-func (o *gcbPublishOptions) GitHubClient(ctx context.Context) (*github.Client, error) {
-	// construct the GitHub API client
-	// The GITHUB_TOKEN must be a GitHub personal access token with at least
-	// `repo` privileges and the associated user must have permission to create
-	// branches and PRs at the Helm GitHub repository.
+// GitHubClient returns a client authorized to write to the owner/repo
+// repository. GITHUB_TOKEN wins when set; it must be a personal access token
+// with at least `repo` privileges for every repository publish writes to.
+// Otherwise a token scoped to owner/repo is minted through octo-sts.
+func (o *gcbPublishOptions) GitHubClient(ctx context.Context, owner, repo string) (*github.Client, error) {
 	githubToken := os.Getenv("GITHUB_TOKEN")
+	if githubToken == "" && o.OctoSTSIdentity != "" {
+		ts, err := idtoken.NewTokenSource(ctx, o.OctoSTSDomain)
+		if err != nil {
+			return nil, fmt.Errorf("getting Google ID token for octo-sts: %w", err)
+		}
+		githubToken, err = octoSTSExchange(ctx, ts, "https://"+o.OctoSTSDomain, owner+"/"+repo, o.OctoSTSIdentity)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if githubToken == "" {
-		return nil, fmt.Errorf("GITHUB_TOKEN environment variable not set - a token is always required to create a release")
+		return nil, fmt.Errorf("no GitHub token: set GITHUB_TOKEN or --octo-sts-identity - a token is always required to create a release")
 	}
 
 	ts := oauth2.StaticTokenSource(
@@ -197,6 +223,8 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.BoolVar(&o.AllowInvalidMetadataSignature, "allow-invalid-metadata-signature", false, "Downgrade staged metadata.json signature verification failures (including a missing signature) from an error to a warning instead of refusing to publish. Intended only for the roll-out period before staging signs metadata.json.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
+	fs.StringVar(&o.OctoSTSIdentity, "octo-sts-identity", "", "Name of the octo-sts trust policy (.github/chainguard/<name>.sts.yaml) in each target GitHub repository. Used to mint GitHub tokens from the build service account's Google ID token when GITHUB_TOKEN is not set.")
+	fs.StringVar(&o.OctoSTSDomain, "octo-sts-domain", "octo-sts.dev", "The octo-sts service to exchange tokens with, also used as the Google ID token audience.")
 }
 
 func (o *gcbPublishOptions) print() {
@@ -215,6 +243,8 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
 	log.Printf("  AllowInvalidMetadataSignature: %v", o.AllowInvalidMetadataSignature)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
+	log.Printf("  OctoSTSIdentity: %q", o.OctoSTSIdentity)
+	log.Printf("  OctoSTSDomain: %q", o.OctoSTSDomain)
 }
 
 func allPublishActionNames() []string {
@@ -457,7 +487,7 @@ func (o *gcbPublishOptions) doVerifyStagedMetadata(ctx context.Context, metadata
 }
 
 func pushHelmChartPR(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
-	githubClient, err := o.GitHubClient(ctx)
+	githubClient, err := o.GitHubClient(ctx, o.PublishedHelmChartGitHubOwner, o.PublishedHelmChartGitHubRepo)
 	if err != nil {
 		return fmt.Errorf("failed to create github client for pushing helm chart PR: %w", err)
 	}
@@ -490,7 +520,7 @@ func pushHelmChartPR(ctx context.Context, o *gcbPublishOptions, rel *release.Unp
 }
 
 func pushGitHubRelease(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
-	githubClient, err := o.GitHubClient(ctx)
+	githubClient, err := o.GitHubClient(ctx, o.PublishedGitHubOrg, o.PublishedGitHubRepo)
 	if err != nil {
 		return fmt.Errorf("failed to create github client for creating github release: %w", err)
 	}
