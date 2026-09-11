@@ -19,8 +19,12 @@
 # release has already been posted. If not, posts one. Also follows
 # closing-issue links and pings those reporters where not yet done.
 #
+# Cherry-pick PRs ("cherry-pick of #N" in the body) are resolved to the
+# original PR, so for a patch release you pass the release-branch PR numbers
+# from the release notes and the pings land on the original PR and its issues.
+#
 # Self-reported issues (where the issue reporter is the same as the PR author)
-# are skipped automatically.
+# and issues reported by members of the repository's organization are skipped.
 #
 # Idempotent: safe to run multiple times; already-pinged PRs and issues are
 # skipped.
@@ -71,6 +75,21 @@ if [[ $# -eq 0 ]]; then
 fi
 
 RELEASE_URL="https://github.com/${REPO}/releases/tag/${RELEASE}"
+ORG="${REPO%%/*}"
+
+# Fail early if the release does not exist, and pick the wording to match.
+if [[ "$(gh release view "$RELEASE" --repo "$REPO" --json isPrerelease --jq .isPrerelease)" == "true" ]]; then
+  RELEASE_KIND="pre-release"
+else
+  RELEASE_KIND="release"
+fi
+
+# is_org_member USER
+# Returns 0 (true) if USER is a member of the repository's organization.
+# Maintainers already know about the release, so they are not pinged.
+is_org_member() {
+  gh api "orgs/${ORG}/members/$1" --silent 2>/dev/null
+}
 
 # has_ping NUMBER
 # Returns 0 (true) if any comment on the issue/PR already contains the release URL.
@@ -98,6 +117,13 @@ post_comment() {
 }
 
 for pr in "$@"; do
+  # Follow a cherry-pick PR to the PR it was picked from.
+  original=$(gh pr view "$pr" --repo "$REPO" --json body \
+    --jq '[.body | scan("(?i)cherry-pick of #([0-9]+)")[]] | first // empty')
+  if [[ -n "$original" ]]; then
+    echo "PR #${pr} is a cherry-pick of #${original}"
+    pr="$original"
+  fi
   echo "PR #${pr}"
 
   # Fetch PR author and linked closing issues in one call.
@@ -121,7 +147,7 @@ for pr in "$@"; do
   else
     pr_body="${pr_mention}This change has been included in [${RELEASE}](${RELEASE_URL}), which is now published.
 
-If you are able to install the pre-release and verify that the change works as expected in your environment, that would be much appreciated. Thank you for the contribution."
+If you are able to install the ${RELEASE_KIND} and verify that the change works as expected in your environment, that would be much appreciated. Thank you for the contribution."
     echo "  pinging PR"
     post_comment "$pr" "$pr_body"
   fi
@@ -134,9 +160,13 @@ If you are able to install the pre-release and verify that the change works as e
     issue_reporter=$(gh issue view "$issue" --repo "$REPO" \
       --json author --jq '.author.login')
 
-    # Skip self-reported issues.
+    # Skip self-reported issues and issues reported by maintainers.
     if [[ "$issue_reporter" == "$pr_author" ]]; then
       echo "    self-reported by @${issue_reporter} — skipping"
+      continue
+    fi
+    if is_org_member "$issue_reporter"; then
+      echo "    reported by ${ORG} member @${issue_reporter} — skipping"
       continue
     fi
 
@@ -145,7 +175,7 @@ If you are able to install the pre-release and verify that the change works as e
     else
       issue_body="@${issue_reporter} The fix or feature you requested has been included in [${RELEASE}](${RELEASE_URL}), which is now published.
 
-If you are able to install the pre-release and verify that it addresses your use case, that would be much appreciated."
+If you are able to install the ${RELEASE_KIND} and verify that it addresses your use case, that would be much appreciated."
       echo "    pinging @${issue_reporter}"
       post_comment "$issue" "$issue_body"
     fi
