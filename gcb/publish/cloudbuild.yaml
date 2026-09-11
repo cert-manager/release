@@ -73,9 +73,6 @@ steps:
   - --nomock=${_NO_MOCK}
   - --published-github-org=${_PUBLISHED_GITHUB_ORG}
   - --published-github-repo=${_PUBLISHED_GITHUB_REPO}
-  - --published-helm-chart-github-owner=${_PUBLISHED_HELM_CHART_GITHUB_OWNER}
-  - --published-helm-chart-github-repo=${_PUBLISHED_HELM_CHART_GITHUB_REPO}
-  - --published-helm-chart-github-branch=${_PUBLISHED_HELM_CHART_GITHUB_BRANCH}
   - --published-image-repo=${_PUBLISHED_IMAGE_REPO}
   - --publish-actions=${_PUBLISH_ACTIONS}
   - --signing-kms-key=${_KMS_KEY}
@@ -115,9 +112,6 @@ substitutions:
   _NO_MOCK: "false"
   _PUBLISHED_GITHUB_ORG: ""
   _PUBLISHED_GITHUB_REPO: ""
-  _PUBLISHED_HELM_CHART_GITHUB_OWNER: ""
-  _PUBLISHED_HELM_CHART_GITHUB_REPO: ""
-  _PUBLISHED_HELM_CHART_GITHUB_BRANCH: ""
   _PUBLISHED_HELM_CHART_OCI_REGISTRY: "quay.io/jetstack/charts"
   _PUBLISHED_IMAGE_REPO: ""
   ## Used to control the exact artifacts which will be published

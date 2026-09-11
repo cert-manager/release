@@ -79,18 +79,6 @@ type gcbPublishOptions struct {
 	// It is used as the repository for manifest lists created for artifacts.
 	PublishedImageRepository string
 
-	// PublishedHelmChartGitHubOwner is the name of the owner of the GitHub repo
-	// for Helm charts.
-	PublishedHelmChartGitHubOwner string
-
-	// PublishedHelmChartGitHubRepo is the name of the GitHub repository for
-	// Helm charts.
-	PublishedHelmChartGitHubRepo string
-
-	// PublishedHelmChartGitHubBranch is the name of the main branch in the
-	// GitHub repository for Helm Charts.
-	PublishedHelmChartGitHubBranch string
-
 	// PublishedGitHubOrg is the org of the repository where the release will
 	// be published to.
 	PublishedGitHubOrg string
@@ -204,9 +192,6 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.ReleaseName, "release-name", "", "Name of the staged release to publish.")
 	fs.BoolVar(&o.NoMock, "nomock", false, "Whether to actually publish the release. If false, the command will exit after preparing the release for pushing.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository to push the release images & manifest lists to.")
-	fs.StringVar(&o.PublishedHelmChartGitHubOwner, "published-helm-chart-github-owner", release.DefaultHelmChartGitHubOwner, "The name of the owner of the GitHub repo for Helm charts.")
-	fs.StringVar(&o.PublishedHelmChartGitHubRepo, "published-helm-chart-github-repo", release.DefaultHelmChartGitHubRepo, "The name of the GitHub repo for Helm charts.")
-	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
 	fs.StringVar(&o.CosignPath, "cosign-path", "cosign", "Full path to the cosign binary. Defaults to searching in $PATH for a binary called 'cosign'")
@@ -225,9 +210,6 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  ReleaseName: %q", o.ReleaseName)
 	log.Printf("  NoMock: %t", o.NoMock)
 	log.Printf("  PublishedImageRepo: %q", o.PublishedImageRepository)
-	log.Printf("  PublishedHelmChartGitHubRepo: %q", o.PublishedHelmChartGitHubRepo)
-	log.Printf("  PublishedHelmChartGitHubOwner: %q", o.PublishedHelmChartGitHubOwner)
-	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
 	log.Printf("  CosignPath: %q", o.CosignPath)
@@ -290,9 +272,6 @@ var publishActionMap map[string]publishAction = map[string]publishAction{
 	"helmchartoci":        pushHelmChartOCI,
 	"githubrelease":       pushGitHubRelease,
 	"pushcontainerimages": pushContainerImages,
-
-	// helmchartpr has been deprecated in favour of helmchartoci
-	// "helmchartpr":         pushHelmChartPR,
 }
 
 func gcbPublishCmd(rootOpts *rootOptions) *cobra.Command {
@@ -600,39 +579,6 @@ func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Un
 	}
 
 	log.Printf("Successfully pushed and signed %d Helm chart(s) to OCI registry", len(rel.Charts))
-	return nil
-}
-
-func pushHelmChartPR(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
-	githubClient, err := o.GitHubClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create github client for pushing helm chart PR: %w", err)
-	}
-
-	helmRepo := helm.NewGitHubRepositoryManager(
-		&helm.GitHubClient{
-			GitClient:          githubClient.Git,
-			PullRequestClient:  githubClient.PullRequests,
-			RepositoriesClient: githubClient.Repositories,
-			UsersClient:        githubClient.Users,
-		},
-		o.PublishedHelmChartGitHubOwner,
-		o.PublishedHelmChartGitHubRepo,
-		o.PublishedHelmChartGitHubBranch,
-	)
-	if err := helmRepo.Check(ctx); err != nil {
-		return fmt.Errorf("error in preflight checks for Helm GitHub repository: %v", err)
-	}
-
-	log.Printf("Pushing Helm chart(s)")
-
-	prURLForHelmCharts, err := helmRepo.Publish(ctx, rel.ReleaseName, rel.Charts...)
-	if err != nil {
-		return err
-	}
-
-	o.manualActionLogger.Printf("Review and merge the GitHub PR containing the Helm charts: %s", prURLForHelmCharts)
-
 	return nil
 }
 
