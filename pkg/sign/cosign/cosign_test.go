@@ -44,6 +44,7 @@ func TestVerifyBlobArgs(t *testing.T) {
 		"gcpkms://projects/proj/locations/loc/keyRings/ring/cryptoKeys/key/versions/1",
 		"--signature",
 		"/tmp/metadata.json.sig",
+		"--insecure-ignore-tlog=true",
 		"/tmp/metadata.json",
 	}
 	if !reflect.DeepEqual(got, want) {

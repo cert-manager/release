@@ -461,40 +461,6 @@ func (o *gcbPublishOptions) doVerifyStagedMetadata(ctx context.Context, metadata
 	return nil
 }
 
-// chartSignOpts are the cosign sign flags we use for Helm charts.
-//
-// Why TlogUpload=false?
-// This flag prevents us creating a tlog entry for the signature, which is
-// usually a good thing to do. Unfortunately, as well as creating the tlog
-// entry, cosign also attempts to verify the tlog entry, which is the issue
-// we run into - our KMS key uses SHA-512 as the signature digest algorithm,
-// but there's no option to specify the digest algorithm for the tlog entry,
-// so verification fails. We solved this for "cosign verify" with a cosign PR[0]
-// a while back, but this problem hasn't been solved for tlog verification.
-// [0]: https://github.com/sigstore/cosign/pull/1071
-//
-// As of cosign 3, --tlog-upload=false is deprecated and we'll eventually have
-// to migrate to using "--signing-config". "--tlog-upload" is incompatible with
-// "--use-signing-config=true". The default in cosign 2 is "--use-signing-config=false".
-// The default in cosign 3 is "--use-signing-config=true", so we have to manually
-// disable it here to keep the same behaviour.
-//
-// cosign 3 also changes the default for "--new-bundle-format" to true, so we
-// have to disable that too to keep the same behaviour as cosign 2, until we're
-// able to verify that everything works with the new bundle format.
-var chartSignOpts = cosign.SignOptions{
-	TlogUpload:       false,
-	NewBundleFormat:  false,
-	UseSigningConfig: false,
-}
-
-// chartVerifyOpts are the cosign verify flags we use for Helm charts. See the
-// chartSignOpts comment for why we ignore tlog.
-var chartVerifyOpts = cosign.VerifyOptions{
-	SignatureDigestAlgorithm: "sha512",
-	InsecureIgnoreTlog:       true,
-}
-
 func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("Pushing Helm chart to OCI registry %q", o.PublishedHelmChartOCIRegistry)
 
@@ -547,12 +513,12 @@ func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Un
 
 		chartRef := fmt.Sprintf("%s/%s:%s", o.PublishedHelmChartOCIRegistry, chart.Name(), rel.ReleaseVersion)
 		log.Printf("Signing chart %s with cosign", chartRef)
-		if err := cosign.SignWithOptions(ctx, runner, o.CosignPath, chartRef, parsedKey, chartSignOpts); err != nil {
+		if err := cosign.SignWithOptions(ctx, runner, o.CosignPath, chartRef, parsedKey, cosign.DefaultSignOptions); err != nil {
 			return fmt.Errorf("failed to sign chart %q: %w", chart.Name(), err)
 		}
 
 		log.Printf("Verifying chart signature for %s", chartRef)
-		if err := cosign.VerifyWithOptions(ctx, runner, o.CosignPath, chartRef, parsedKey, chartVerifyOpts); err != nil {
+		if err := cosign.VerifyWithOptions(ctx, runner, o.CosignPath, chartRef, parsedKey, cosign.DefaultVerifyOptions); err != nil {
 			return fmt.Errorf("failed to verify chart signature for %q: %w", chart.Name(), err)
 		}
 
@@ -567,12 +533,12 @@ func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Un
 			}
 
 			log.Printf("Signing non-v-prefixed chart %s", destRef)
-			if err := cosign.SignWithOptions(ctx, runner, o.CosignPath, destRef, parsedKey, chartSignOpts); err != nil {
+			if err := cosign.SignWithOptions(ctx, runner, o.CosignPath, destRef, parsedKey, cosign.DefaultSignOptions); err != nil {
 				return fmt.Errorf("failed to sign non-v chart %q: %w", chart.Name(), err)
 			}
 
 			log.Printf("Verifying non-v-prefixed chart signature for %s", destRef)
-			if err := cosign.VerifyWithOptions(ctx, runner, o.CosignPath, destRef, parsedKey, chartVerifyOpts); err != nil {
+			if err := cosign.VerifyWithOptions(ctx, runner, o.CosignPath, destRef, parsedKey, cosign.DefaultVerifyOptions); err != nil {
 				return fmt.Errorf("failed to verify non-v chart signature for %q: %w", chart.Name(), err)
 			}
 		}
@@ -768,7 +734,9 @@ func signOCIImages(ctx context.Context, o *gcbPublishOptions, allContentToSign [
 
 	for _, toSign := range allContentToSign {
 		log.Printf("Signing %q", toSign)
-		if err := retry(ctx, func() error { return cosign.Sign(ctx, o.CosignPath, []string{toSign}, parsedKey) }); err != nil {
+		if err := retry(ctx, func() error {
+			return cosign.SignWithOptions(ctx, o.Runner, o.CosignPath, toSign, parsedKey, cosign.DefaultSignOptions)
+		}); err != nil {
 			return fmt.Errorf("failed to sign container image / manifest list %q: %w", toSign, err)
 		}
 

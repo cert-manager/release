@@ -24,15 +24,42 @@ import (
 	"github.com/cert-manager/release/pkg/sign"
 )
 
-// Sign calls out to cosign to sign a given container using the provided GCP key.
-func Sign(ctx context.Context, cosignPath string, containers []string, key sign.GCPKMSKey) error {
-	args := append([]string{
-		"sign",
-		"--key",
-		key.CosignFormat(),
-	}, containers...)
+// DefaultSignOptions are the cosign sign flags used for every artifact cmrel
+// signs: container images, manifest lists and Helm charts. They keep the
+// behaviour cosign v1 had for key-based signing, where nothing was uploaded to
+// the transparency log unless COSIGN_EXPERIMENTAL was set.
+//
+// Why TlogUpload=false?
+// This flag prevents us creating a tlog entry for the signature, which is
+// usually a good thing to do. Unfortunately, as well as creating the tlog
+// entry, cosign also attempts to verify the tlog entry, which is the issue
+// we run into - our KMS key uses SHA-512 as the signature digest algorithm,
+// but there's no option to specify the digest algorithm for the tlog entry,
+// so verification fails. We solved this for "cosign verify" with a cosign PR[0]
+// a while back, but this problem hasn't been solved for tlog verification.
+// [0]: https://github.com/sigstore/cosign/pull/1071
+//
+// As of cosign 3, --tlog-upload=false is deprecated and we'll eventually have
+// to migrate to using "--signing-config". "--tlog-upload" is incompatible with
+// "--use-signing-config=true". The default in cosign 2 is "--use-signing-config=false".
+// The default in cosign 3 is "--use-signing-config=true", so we have to manually
+// disable it here to keep the same behaviour.
+//
+// cosign 3 also changes the default for "--new-bundle-format" to true, so we
+// have to disable that too to keep the same behaviour as cosign 2, until we're
+// able to verify that everything works with the new bundle format.
+var DefaultSignOptions = SignOptions{
+	TlogUpload:       false,
+	NewBundleFormat:  false,
+	UseSigningConfig: false,
+}
 
-	return shell.Command(ctx, "", cosignPath, args...)
+// DefaultVerifyOptions are the cosign verify flags that match
+// DefaultSignOptions: there is no tlog entry to check, and the KMS key signs
+// with SHA-512.
+var DefaultVerifyOptions = VerifyOptions{
+	SignatureDigestAlgorithm: "sha512",
+	InsecureIgnoreTlog:       true,
 }
 
 // VerifyBlob calls out to cosign to verify that the detached signature at
@@ -49,6 +76,11 @@ func verifyBlobArgs(key sign.GCPKMSKey, blobPath, signaturePath string) []string
 		key.CosignFormat(),
 		"--signature",
 		signaturePath,
+		// Staging signs metadata.json with "cosign sign-blob --tlog-upload=false"
+		// (see make/release.mk in cert-manager), so there is no tlog entry to
+		// look up. Without this flag cosign v2+ fails the verification when it
+		// cannot find one.
+		"--insecure-ignore-tlog=true",
 		blobPath,
 	}
 }
