@@ -26,6 +26,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"google.golang.org/api/cloudbuild/v1"
 
+	gcbconfig "github.com/cert-manager/release/gcb"
 	"github.com/cert-manager/release/pkg/gcb"
 	"github.com/cert-manager/release/pkg/release"
 	"github.com/cert-manager/release/pkg/sign"
@@ -108,8 +109,7 @@ func (o *stageOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Repo, "repo", "cert-manager", "Name of the GitHub repo to fetch cert-manager sources from.")
 	fs.StringVar(&o.Branch, "branch", "master", "The git branch to build the release from. If --git-ref is not specified, the HEAD of this branch will be looked up on GitHub.")
 	fs.StringVar(&o.GitRef, "git-ref", "", "The git commit ref of cert-manager that should be staged.")
-	fs.StringVar(&o.CloudBuildFile, "cloudbuild", "./gcb/stage/cloudbuild.yaml", "The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild. "+
-		"The default value assumes that this tool is run from the root of the release repository.")
+	fs.StringVar(&o.CloudBuildFile, "cloudbuild", "", cloudBuildFlagHelp)
 	fs.StringVar(&o.Project, "project", release.DefaultReleaseProject, "The GCP project to run the GCB build jobs in.")
 	fs.StringVar(&o.ReleaseVersion, "release-version", "", "Optional release version override used to force the version strings used during the release to a specific value. If not set, build is treated as development build and artifacts staged to 'devel' path.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository set when building the release.")
@@ -182,8 +182,7 @@ func runStage(rootOpts *rootOptions, o *stageOptions) error {
 
 	log.Printf("Staging build for %s/%s@%s", o.Org, o.Repo, o.GitRef)
 
-	log.Printf("DEBUG: Loading cloudbuild.yaml file from %q", o.CloudBuildFile)
-	build, err := gcb.LoadBuild(o.CloudBuildFile)
+	build, err := loadCloudBuild(o.CloudBuildFile, gcbconfig.Stage)
 	if err != nil {
 		return fmt.Errorf("error loading cloudbuild.yaml file: %w", err)
 	}
