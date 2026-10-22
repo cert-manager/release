@@ -25,6 +25,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"google.golang.org/api/cloudbuild/v1"
 
+	gcbconfig "github.com/cert-manager/release/gcb"
 	"github.com/cert-manager/release/pkg/gcb"
 	"github.com/cert-manager/release/pkg/release"
 )
@@ -65,7 +66,7 @@ type bootstrapPGPOptions struct {
 
 func (o *bootstrapPGPOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Key, "key", "", "Full name of the GCP KMS key to use for bootstrapping")
-	fs.StringVar(&o.CloudBuildFile, "cloudbuild", "./gcb/bootstrap-pgp/cloudbuild.yaml", "The path to the cloudbuild.yaml file to be invoked.")
+	fs.StringVar(&o.CloudBuildFile, "cloudbuild", "", cloudBuildFlagHelp)
 	fs.StringVar(&o.Project, "project", release.DefaultReleaseProject, "GCP project in which to run the GCB build job.")
 	markRequired("key")
 }
@@ -102,11 +103,9 @@ func runBootstrapPGP(rootOpts *rootOptions, o *bootstrapPGPOptions) error {
 
 	log.Printf("Bootstrapping PGP identity from %s", o.Key)
 
-	log.Printf("DEBUG: Loading cloudbuild.yaml file from %q", o.CloudBuildFile)
-
-	build, err := gcb.LoadBuild(o.CloudBuildFile)
+	build, err := loadCloudBuild(o.CloudBuildFile, gcbconfig.BootstrapPGP)
 	if err != nil {
-		return fmt.Errorf("error loading %q: %w", o.CloudBuildFile, err)
+		return fmt.Errorf("error loading cloudbuild.yaml file: %w", err)
 	}
 
 	build.Substitutions["_KMS_KEY"] = o.Key
