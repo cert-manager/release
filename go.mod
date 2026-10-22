@@ -13,7 +13,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/mod v0.42.0
 	golang.org/x/oauth2 v0.37.0
-	google.golang.org/api v0.304.0
+	google.golang.org/api v0.305.0
 	helm.sh/helm/v4 v4.3.1
 	k8s.io/apimachinery v0.37.1
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
