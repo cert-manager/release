@@ -31,6 +31,7 @@ clean:
 test: test-validate-gomod test-validate-gomod-success
 	@# TODO: this should be go test ./... but one of the tests was broken a while back and needs fixing first
 	go test ./cmd/cmrel/cmd/...
+	go test ./gcb
 	go test ./pkg/release
 	go test ./pkg/release/helm
 	go test ./pkg/release/manifests
