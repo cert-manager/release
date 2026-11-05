@@ -26,7 +26,7 @@ import (
 
 // DefaultSignOptions are the cosign sign flags used for every artifact cmrel
 // signs: container images, manifest lists and Helm charts. They keep the
-// behaviour cosign v1 had for key-based signing, where nothing was uploaded to
+// behavior cosign v1 had for key-based signing, where nothing was uploaded to
 // the transparency log unless COSIGN_EXPERIMENTAL was set.
 //
 // Why TlogUpload=false?
@@ -43,10 +43,10 @@ import (
 // to migrate to using "--signing-config". "--tlog-upload" is incompatible with
 // "--use-signing-config=true". The default in cosign 2 is "--use-signing-config=false".
 // The default in cosign 3 is "--use-signing-config=true", so we have to manually
-// disable it here to keep the same behaviour.
+// disable it here to keep the same behavior.
 //
 // cosign 3 also changes the default for "--new-bundle-format" to true, so we
-// have to disable that too to keep the same behaviour as cosign 2, until we're
+// have to disable that too to keep the same behavior as cosign 2, until we're
 // able to verify that everything works with the new bundle format.
 var DefaultSignOptions = SignOptions{
 	TlogUpload:       false,

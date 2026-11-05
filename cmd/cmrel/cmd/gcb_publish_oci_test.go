@@ -25,6 +25,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -114,11 +116,13 @@ func writeChartTgz(t *testing.T, dir, chartName, chartVersion string, withProv b
 
 // newTestRelease builds a release.Unpacked containing a single chart at the
 // given version. The chart is written to a fresh tempdir owned by the test.
+// The chart version matches the release version, as release validation
+// requires for a real release.
 func newTestRelease(t *testing.T, releaseVersion string) *release.Unpacked {
 	t.Helper()
 
 	dir := t.TempDir()
-	chartPath := writeChartTgz(t, dir, testChartName, testChartVersion, true)
+	chartPath := writeChartTgz(t, dir, testChartName, releaseVersion, true)
 
 	chart, err := manifests.NewChart(chartPath)
 	if err != nil {
@@ -257,14 +261,20 @@ func TestPushHelmChartOCI_SkipSigning(t *testing.T) {
 		t.Fatalf("pushHelmChartOCI failed: %v", err)
 	}
 
-	// Expect: helm version, crane version, helm push. No sign/verify/copy.
-	if got, want := len(rec.calls), 3; got != want {
-		t.Fatalf("got %d calls, want %d: %+v", got, want, rec.calls)
+	// Skipping signing must not skip publishing: the non-v tag is still copied.
+	vRef := fmt.Sprintf("%s/cert-manager:%s", testOCIRegistry, testReleaseVersion)
+	nonVRef := fmt.Sprintf("%s/cert-manager:%s", testOCIRegistry, strings.TrimPrefix(testReleaseVersion, "v"))
+	wantCalls := []shellCall{
+		{cmd: testHelmPath, args: []string{"version"}},
+		{cmd: testCranePath, args: []string{"version"}},
+		{cmd: testHelmPath, args: []string{"push", rel.Charts[0].Path(), "oci://" + testOCIRegistry}},
+		{cmd: testCranePath, args: []string{"copy", vRef, nonVRef}},
 	}
-	for _, c := range rec.calls {
-		if c.cmd == testCosignPath {
-			t.Errorf("expected no cosign calls when skip-signing, got: %+v", c)
-		}
+	if len(rec.calls) != len(wantCalls) {
+		t.Fatalf("got %d calls, want %d: %+v", len(rec.calls), len(wantCalls), rec.calls)
+	}
+	for i, want := range wantCalls {
+		assertCallEqual(t, i, rec.calls[i], want.cmd, want.args)
 	}
 }
 
@@ -282,6 +292,9 @@ func TestPushHelmChartOCI_NoCharts(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no charts") {
 		t.Errorf("expected error about missing charts, got: %v", err)
+	}
+	if len(rec.calls) != 0 {
+		t.Errorf("expected no commands to run when there are no charts, got: %+v", rec.calls)
 	}
 }
 
@@ -386,6 +399,34 @@ func TestNewGCBPublishOptionsHasDefaultRunner(t *testing.T) {
 	o := NewGCBPublishOptions()
 	if o.Runner == nil {
 		t.Error("expected NewGCBPublishOptions to populate a default Runner so production callers don't need to set one")
+	}
+}
+
+// TestPublishActionListOrder checks that the chart is published after the
+// images it references, whatever order the actions are given in.
+func TestPublishActionListOrder(t *testing.T) {
+	for name := range publishActionMap {
+		if !slices.Contains(publishActionOrder, name) {
+			t.Errorf("publish action %q is missing from publishActionOrder", name)
+		}
+	}
+
+	o := NewGCBPublishOptions()
+	o.PublishActions = []string{"helmchartoci", "pushcontainerimages"}
+	funcs, err := o.PublishActionList()
+	if err != nil {
+		t.Fatalf("PublishActionList failed: %v", err)
+	}
+	var got []string
+	for _, f := range funcs {
+		got = append(got, runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name())
+	}
+	want := []string{
+		"github.com/cert-manager/release/cmd/cmrel/cmd.pushContainerImages",
+		"github.com/cert-manager/release/cmd/cmrel/cmd.pushHelmChartOCI",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("publish order = %v, want %v", got, want)
 	}
 }
 

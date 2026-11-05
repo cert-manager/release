@@ -158,11 +158,15 @@ func (o *gcbPublishOptions) PublishActionList() ([]publishAction, error) {
 		return nil, fmt.Errorf("no artifacts to be published; nothing to do")
 	}
 
-	actionFuncs := make([]publishAction, len(actionNames))
-
-	for i, action := range actionNames {
-		// don't check if it's in map since we checked in canonicalizeAndVerifyPublishActions
-		actionFuncs[i] = publishActionMap[action]
+	selected := sets.NewString(actionNames...)
+	var actionFuncs []publishAction
+	for _, action := range publishActionOrder {
+		if selected.Has(action) {
+			actionFuncs = append(actionFuncs, publishActionMap[action])
+		}
+	}
+	if len(actionFuncs) != len(actionNames) {
+		return nil, fmt.Errorf("publishActionOrder is missing one of %v", actionNames)
 	}
 
 	return actionFuncs, nil
@@ -201,7 +205,7 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.PublishedHelmChartOCIRegistry, "published-helm-chart-oci-registry", defaultHelmOCIRegistry, "The OCI registry to push Helm charts to.")
 	fs.StringVar(&o.HelmPath, "helm-path", "helm", "Full path to the helm binary. Defaults to searching in $PATH for a binary called 'helm'")
 	fs.StringVar(&o.CranePath, "crane-path", "crane", "Full path to the crane binary. Defaults to searching in $PATH for a binary called 'crane'")
-	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
+	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations run in a fixed order: %s. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(publishActionOrder, ", "), strings.Join(allPublishActionNames(), ", ")))
 }
 
 func (o *gcbPublishOptions) print() {
@@ -237,7 +241,7 @@ func allPublishActionNames() []string {
 // canonicalizeAndVerifyPublishActions converts a list of raw actions into
 // a slice of canonical action names (whitespace removed, lowercased), returning an error
 // if any of the actions don't correspond to known actions. Supports removing actions via a prefix of "-"
-// Actions are returned in alphabetical order
+// Actions are returned in alphabetical order; PublishActionList puts them in execution order.
 func canonicalizeAndVerifyPublishActions(rawActions []string) ([]string, error) {
 	actions := sets.NewString()
 
@@ -272,6 +276,16 @@ var publishActionMap map[string]publishAction = map[string]publishAction{
 	"helmchartoci":        pushHelmChartOCI,
 	"githubrelease":       pushGitHubRelease,
 	"pushcontainerimages": pushContainerImages,
+}
+
+// publishActionOrder is the order in which selected publish actions run. The
+// Helm chart goes last because it references the container images: publishing
+// it first would expose a chart whose images may not exist yet, or never exist
+// if the image push fails. Every key of publishActionMap must appear here.
+var publishActionOrder = []string{
+	"githubrelease",
+	"pushcontainerimages",
+	"helmchartoci",
 }
 
 func gcbPublishCmd(rootOpts *rootOptions) *cobra.Command {
@@ -464,6 +478,10 @@ func (o *gcbPublishOptions) doVerifyStagedMetadata(ctx context.Context, metadata
 func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
 	log.Printf("Pushing Helm chart to OCI registry %q", o.PublishedHelmChartOCIRegistry)
 
+	if len(rel.Charts) == 0 {
+		return fmt.Errorf("no charts found in unpacked release")
+	}
+
 	runner := o.Runner
 	if runner == nil {
 		runner = shell.Default
@@ -480,10 +498,6 @@ func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Un
 		return fmt.Errorf("failed to verify crane installation: %w", err)
 	}
 
-	if len(rel.Charts) == 0 {
-		return fmt.Errorf("no charts found in unpacked release")
-	}
-
 	ociURL := fmt.Sprintf("oci://%s", o.PublishedHelmChartOCIRegistry)
 
 	var parsedKey sign.GCPKMSKey
@@ -493,6 +507,29 @@ func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Un
 		if err != nil {
 			return fmt.Errorf("failed to parse KMS key: %w", err)
 		}
+	}
+
+	// signAndVerify signs ref with cosign and checks the signature, unless
+	// --skip-signing is set. Signing is retried like image signing is, because
+	// the registry can briefly lag behind a push.
+	signAndVerify := func(ref string) error {
+		if o.SkipSigning {
+			log.Printf("Skipping signing for %s as skip-signing is set", ref)
+			return nil
+		}
+
+		log.Printf("Signing chart %s with cosign", ref)
+		if err := retry(ctx, func() error {
+			return cosign.SignWithOptions(ctx, runner, o.CosignPath, ref, parsedKey, cosign.DefaultSignOptions)
+		}); err != nil {
+			return fmt.Errorf("failed to sign chart %s: %w", ref, err)
+		}
+
+		log.Printf("Verifying chart signature for %s", ref)
+		if err := cosign.VerifyWithOptions(ctx, runner, o.CosignPath, ref, parsedKey, cosign.DefaultVerifyOptions); err != nil {
+			return fmt.Errorf("failed to verify chart signature for %s: %w", ref, err)
+		}
+		return nil
 	}
 
 	for _, chart := range rel.Charts {
@@ -506,45 +543,32 @@ func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Un
 			return fmt.Errorf("failed to push chart %q to OCI registry: %w", chart.Name(), err)
 		}
 
-		if o.SkipSigning {
-			log.Printf("Skipping signing for chart %q as skip-signing is set", chart.Name())
+		// helm push tags the chart with the version from Chart.yaml, so build
+		// the reference from the same value.
+		chartRef := fmt.Sprintf("%s/%s:%s", o.PublishedHelmChartOCIRegistry, chart.Name(), chart.Version())
+		if err := signAndVerify(chartRef); err != nil {
+			return err
+		}
+
+		// Also publish the chart under the version without the "v" prefix, which
+		// is what "helm upgrade --version" and version-range lookups expect.
+		nonVVersion, hadV := strings.CutPrefix(chart.Version(), "v")
+		if !hadV {
 			continue
 		}
 
-		chartRef := fmt.Sprintf("%s/%s:%s", o.PublishedHelmChartOCIRegistry, chart.Name(), rel.ReleaseVersion)
-		log.Printf("Signing chart %s with cosign", chartRef)
-		if err := cosign.SignWithOptions(ctx, runner, o.CosignPath, chartRef, parsedKey, cosign.DefaultSignOptions); err != nil {
-			return fmt.Errorf("failed to sign chart %q: %w", chart.Name(), err)
+		destRef := fmt.Sprintf("%s/%s:%s", o.PublishedHelmChartOCIRegistry, chart.Name(), nonVVersion)
+		log.Printf("Copying chart %q to non-v-prefixed version: %s", chart.Name(), destRef)
+		if err := helm.CopyChartTag(ctx, runner, chartRef, destRef, o.CranePath); err != nil {
+			return fmt.Errorf("failed to copy chart tag for %q: %w", chart.Name(), err)
 		}
 
-		log.Printf("Verifying chart signature for %s", chartRef)
-		if err := cosign.VerifyWithOptions(ctx, runner, o.CosignPath, chartRef, parsedKey, cosign.DefaultVerifyOptions); err != nil {
-			return fmt.Errorf("failed to verify chart signature for %q: %w", chart.Name(), err)
-		}
-
-		// Handle non-v-prefixed version if applicable
-		if strings.HasPrefix(rel.ReleaseVersion, "v") {
-			nonVVersion := strings.TrimPrefix(rel.ReleaseVersion, "v")
-			destRef := fmt.Sprintf("%s/%s:%s", o.PublishedHelmChartOCIRegistry, chart.Name(), nonVVersion)
-			log.Printf("Copying chart %q to non-v-prefixed version: %s", chart.Name(), destRef)
-
-			if err := helm.CopyChartTag(ctx, runner, chartRef, destRef, o.CranePath); err != nil {
-				return fmt.Errorf("failed to copy chart tag for %q: %w", chart.Name(), err)
-			}
-
-			log.Printf("Signing non-v-prefixed chart %s", destRef)
-			if err := cosign.SignWithOptions(ctx, runner, o.CosignPath, destRef, parsedKey, cosign.DefaultSignOptions); err != nil {
-				return fmt.Errorf("failed to sign non-v chart %q: %w", chart.Name(), err)
-			}
-
-			log.Printf("Verifying non-v-prefixed chart signature for %s", destRef)
-			if err := cosign.VerifyWithOptions(ctx, runner, o.CosignPath, destRef, parsedKey, cosign.DefaultVerifyOptions); err != nil {
-				return fmt.Errorf("failed to verify non-v chart signature for %q: %w", chart.Name(), err)
-			}
+		if err := signAndVerify(destRef); err != nil {
+			return err
 		}
 	}
 
-	log.Printf("Successfully pushed and signed %d Helm chart(s) to OCI registry", len(rel.Charts))
+	log.Printf("Successfully pushed %d Helm chart(s) to OCI registry", len(rel.Charts))
 	return nil
 }
 
