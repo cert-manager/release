@@ -102,7 +102,7 @@ Full usage information for `cmrel stage`:
 Flags:
       --branch string                 The git branch to build the release from. If --git-ref is not specified, the HEAD of this branch will be looked up on GitHub. (default "master")
       --bucket string                 The name of the GCS bucket to stage the release to. (default "cert-manager-release")
-      --cloudbuild string             The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild. The default value assumes that this tool is run from the root of the release repository. (default "./gcb/stage/cloudbuild.yaml")
+      --cloudbuild string             Path to a cloudbuild.yaml to use instead of the one embedded in this binary. For cmrel development only: a release must use the embedded config so that it matches the pinned cmrel commit.
       --git-ref string                The git commit ref of cert-manager that should be staged.
   -h, --help                          help for stage
       --org string                    Name of the GitHub org to fetch cert-manager sources from. (default "cert-manager")

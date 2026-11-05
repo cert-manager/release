@@ -27,6 +27,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"google.golang.org/api/cloudbuild/v1"
 
+	gcbconfig "github.com/cert-manager/release/gcb"
 	"github.com/cert-manager/release/pkg/gcb"
 	"github.com/cert-manager/release/pkg/release"
 	"github.com/cert-manager/release/pkg/releaseref"
@@ -121,8 +122,7 @@ type publishOptions struct {
 func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.StringVar(&o.Bucket, "bucket", release.DefaultBucketName, "The name of the GCS bucket to publish the release to.")
 	fs.StringVar(&o.ReleaseName, "release-name", "", "Name of the staged release to publish.")
-	fs.StringVar(&o.CloudBuildFile, "cloudbuild", "./gcb/publish/cloudbuild.yaml", "The path to the cloudbuild.yaml file used to publish the release. "+
-		"The default value assumes that this tool is run from the root of the release repository.")
+	fs.StringVar(&o.CloudBuildFile, "cloudbuild", "", cloudBuildFlagHelp)
 	fs.StringVar(&o.Project, "project", release.DefaultReleaseProject, "The GCP project to run the GCB build jobs in.")
 	fs.BoolVar(&o.NoMock, "nomock", false, "Whether to actually publish the release. If false, the command will exit after preparing the release for pushing.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository to push the release images & manifest lists to.")
@@ -200,8 +200,7 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	}
 	log.Printf("Release with version %q (%s) will be published", rel.Metadata().ReleaseVersion, rel.Metadata().GitCommitRef)
 
-	log.Printf("DEBUG: Loading cloudbuild.yaml file from %q", o.CloudBuildFile)
-	build, err := gcb.LoadBuild(o.CloudBuildFile)
+	build, err := loadCloudBuild(o.CloudBuildFile, gcbconfig.Publish)
 	if err != nil {
 		return fmt.Errorf("error loading cloudbuild.yaml file: %w", err)
 	}
@@ -238,7 +237,7 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	// rather than installing cmrel from a mutable ref (e.g. "master") inside the
 	// privileged build. --skip-cmrel-pin opts out for cmrel development.
 	if o.SkipCmrelPin {
-		log.Printf("WARNING: --skip-cmrel-pin set; GCB will install cmrel from %q as set in %q, not pinned to this binary", build.Substitutions["_RELEASE_REPO_REF"], o.CloudBuildFile)
+		log.Printf("WARNING: --skip-cmrel-pin set; GCB will install cmrel from %q as set in the cloudbuild.yaml, not pinned to this binary", build.Substitutions["_RELEASE_REPO_REF"])
 	} else {
 		repoRef, err := releaseref.Resolve()
 		if err != nil {
