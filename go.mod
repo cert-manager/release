@@ -6,7 +6,7 @@ require (
 	cloud.google.com/go/storage v1.70.0
 	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/cenkalti/backoff/v7 v7.0.1
+	github.com/cenkalti/backoff/v7 v7.0.3
 	github.com/google/go-github/v35 v35.3.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
