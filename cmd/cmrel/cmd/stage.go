@@ -71,6 +71,7 @@ type stageOptions struct {
 	GitRef string
 
 	// The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild
+	// Empty means the config embedded in this binary; see --cloudbuild.
 	CloudBuildFile string
 
 	// Project is the name of the GCP project to run the GCB job in

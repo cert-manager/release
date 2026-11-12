@@ -47,6 +47,11 @@ It can only be run by specifying a previously staged build.
 	publishExample = ""
 )
 
+// cmrelPinPlaceholder is the value of _RELEASE_REPO_REF in the embedded
+// publish config. It is not a valid ref, so the GCB job fails if cmrel does
+// not replace it.
+const cmrelPinPlaceholder = "PINNED_CMREL_COMMIT_SHA_REQUIRED"
+
 type publishOptions struct {
 	// The name of the GCS bucket to publish the release to
 	Bucket string
@@ -55,6 +60,7 @@ type publishOptions struct {
 	ReleaseName string
 
 	// The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild
+	// Empty means the config embedded in this binary; see --cloudbuild.
 	CloudBuildFile string
 
 	// Project to run the GCB job in
@@ -135,7 +141,7 @@ func (o *publishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)) {
 	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
 	fs.BoolVar(&o.AllowInvalidMetadataSignature, "allow-invalid-metadata-signature", false, "Let the publish job proceed when the staged metadata.json signature is missing or invalid, instead of failing. Intended only for the roll-out period before staging signs metadata.json.")
 	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Order of operations is preserved if given, or is alphabetical by default. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
-	fs.BoolVar(&o.SkipCmrelPin, "skip-cmrel-pin", false, "Skip pinning the GCB cmrel install to this binary's commit and use the ref set in the cloudbuild.yaml instead. For cmrel development against a pushed dev branch only; do not use for real releases.")
+	fs.BoolVar(&o.SkipCmrelPin, "skip-cmrel-pin", false, "Skip pinning the GCB cmrel install to this binary's commit and use the ref set in the cloudbuild.yaml instead. Needs --cloudbuild, because the embedded config sets no usable ref. For cmrel development against a pushed dev branch only; do not use for real releases.")
 }
 
 func (o *publishOptions) print() {
@@ -237,6 +243,9 @@ func runPublish(rootOpts *rootOptions, o *publishOptions) error {
 	// rather than installing cmrel from a mutable ref (e.g. "master") inside the
 	// privileged build. --skip-cmrel-pin opts out for cmrel development.
 	if o.SkipCmrelPin {
+		if build.Substitutions["_RELEASE_REPO_REF"] == cmrelPinPlaceholder {
+			return fmt.Errorf("--skip-cmrel-pin needs a cloudbuild.yaml that sets _RELEASE_REPO_REF, but it is still the placeholder %q: pass --cloudbuild with a file that sets it to your branch or commit", cmrelPinPlaceholder)
+		}
 		log.Printf("WARNING: --skip-cmrel-pin set; GCB will install cmrel from %q as set in the cloudbuild.yaml, not pinned to this binary", build.Substitutions["_RELEASE_REPO_REF"])
 	} else {
 		repoRef, err := releaseref.Resolve()

@@ -58,6 +58,7 @@ type bootstrapPGPOptions struct {
 	Key string
 
 	// The path to the cloudbuild.yaml file to be invoked
+	// Empty means the config embedded in this binary; see --cloudbuild.
 	CloudBuildFile string
 
 	// Project names the GCP project in which the GCB job will be run
