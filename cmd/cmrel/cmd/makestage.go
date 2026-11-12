@@ -62,6 +62,7 @@ type makeStageOptions struct {
 	Ref string
 
 	// The path to the cloudbuild.yaml file to be used
+	// Empty means the config embedded in this binary; see --cloudbuild.
 	CloudBuildFile string
 
 	// Project is the name of the GCP project to run the GCB job in

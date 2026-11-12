@@ -24,16 +24,21 @@ import (
 )
 
 // TestEmbeddedConfigsParse fails if any embedded cloudbuild.yaml no longer
-// decodes, so a broken YAML is caught in CI rather than on release day.
+// decodes or declares no substitutions, so a broken YAML is caught in CI rather than on release day.
 func TestEmbeddedConfigsParse(t *testing.T) {
-	for name, data := range map[string][]byte{
+	for name, data := range map[string]string{
 		"stage":         gcbconfig.Stage,
 		"makestage":     gcbconfig.MakeStage,
 		"publish":       gcbconfig.Publish,
 		"bootstrap-pgp": gcbconfig.BootstrapPGP,
 	} {
-		if _, err := gcb.ParseBuild(data); err != nil {
+		build, err := gcb.ParseBuild([]byte(data))
+		if err != nil {
 			t.Errorf("%s: %v", name, err)
+			continue
+		}
+		if len(build.Substitutions) == 0 {
+			t.Errorf("%s: no substitutions declared; cmrel sets them for every config", name)
 		}
 	}
 }
@@ -41,7 +46,7 @@ func TestEmbeddedConfigsParse(t *testing.T) {
 // TestPublishPinPlaceholder fails if the publish config stops failing closed
 // when cmrel does not substitute _RELEASE_REPO_REF.
 func TestPublishPinPlaceholder(t *testing.T) {
-	build, err := gcb.ParseBuild(gcbconfig.Publish)
+	build, err := gcb.ParseBuild([]byte(gcbconfig.Publish))
 	if err != nil {
 		t.Fatal(err)
 	}

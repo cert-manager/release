@@ -17,18 +17,20 @@ limitations under the License.
 // Package gcb embeds the Cloud Build configs so that cmrel carries the
 // config that matches the commit it was built from. Release managers then
 // only need `go install`; no checkout of this repository is required.
+//
+// The configs are strings so that importers cannot modify them.
 package gcb
 
 import _ "embed"
 
 //go:embed stage/cloudbuild.yaml
-var Stage []byte
+var Stage string
 
 //go:embed makestage/cloudbuild.yaml
-var MakeStage []byte
+var MakeStage string
 
 //go:embed publish/cloudbuild.yaml
-var Publish []byte
+var Publish string
 
 //go:embed bootstrap-pgp/cloudbuild.yaml
-var BootstrapPGP []byte
+var BootstrapPGP string
