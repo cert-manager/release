@@ -102,7 +102,7 @@ Full usage information for `cmrel stage`:
 Flags:
       --branch string                 The git branch to build the release from. If --git-ref is not specified, the HEAD of this branch will be looked up on GitHub. (default "master")
       --bucket string                 The name of the GCS bucket to stage the release to. (default "cert-manager-release")
-      --cloudbuild string             The path to the cloudbuild.yaml file used to perform the cert-manager crossbuild. The default value assumes that this tool is run from the root of the release repository. (default "./gcb/stage/cloudbuild.yaml")
+      --cloudbuild string             Path to a cloudbuild.yaml to use instead of the one embedded in this binary. For cmrel development only: a release must use the embedded config, which is the one this binary was built with.
       --git-ref string                The git commit ref of cert-manager that should be staged.
   -h, --help                          help for stage
       --org string                    Name of the GitHub org to fetch cert-manager sources from. (default "cert-manager")
@@ -213,4 +213,10 @@ to set the following flags when calling `cmrel publish`:
 By default the artifacts created during a release process are pushed to `cert-manager-release` bucket at `/stage/gcb/release` path.
 It is also possible to create a 'development' build by skipping the `--release-version` flag on `cmrel stage` command. This will result in the build artifacts being pushed to `cert-manager-release` bucket at `/stage/gcb/devel` path.
 
-If you have made some local changes to this tool and want to create a 'devel' build to test them, be mindful that the Google Cloud Build triggered by running `cmrel stage` clones this repository from GitHub and runs its own `cmrel` commands. You can modify the [Cloud Build config](https://github.com/cert-manager/release/blob/master/gcb/stage/cloudbuild.yaml) to configure a different GitHub repository/branch.
+If you have made some local changes to this tool and want to create a 'devel' build to test them, be mindful that the Google Cloud Build triggered by running `cmrel stage` clones this repository from GitHub and runs its own `cmrel` commands. To make it use a different GitHub repository or branch, edit `_RELEASE_REPO_REF` in your copy of the [Cloud Build config](https://github.com/cert-manager/release/blob/master/gcb/stage/cloudbuild.yaml) and pass that file with `--cloudbuild`:
+
+```sh
+cmrel stage --cloudbuild ./gcb/stage/cloudbuild.yaml ...
+```
+
+`cmrel` embeds the Cloud Build configs when it is built. Without `--cloudbuild`, an installed `cmrel` ignores your edits to the files in `gcb/`.
