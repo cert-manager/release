@@ -38,9 +38,9 @@ import (
 
 	"github.com/cert-manager/release/pkg/release"
 	"github.com/cert-manager/release/pkg/release/docker"
-	"github.com/cert-manager/release/pkg/release/helm"
 	"github.com/cert-manager/release/pkg/release/publish/registry"
 	"github.com/cert-manager/release/pkg/release/validation"
+	"github.com/cert-manager/release/pkg/shell"
 	"github.com/cert-manager/release/pkg/sign"
 	"github.com/cert-manager/release/pkg/sign/cosign"
 )
@@ -51,7 +51,7 @@ const (
 	gcbPublishLongDescription = `
 The 'gcb publish' subcommand will fetch a staged release from GCS, verify its
 integrity and publish artifacts to public-facing artifact repositories (e.g.
-Quay.io, GitHub releases and the Helm chart repostory).
+Quay.io, GitHub releases and the Helm chart OCI registry).
 
 It requires Docker to be installed and available.
 
@@ -77,18 +77,6 @@ type gcbPublishOptions struct {
 	// releases should be pushed to.
 	// It is used as the repository for manifest lists created for artifacts.
 	PublishedImageRepository string
-
-	// PublishedHelmChartGitHubOwner is the name of the owner of the GitHub repo
-	// for Helm charts.
-	PublishedHelmChartGitHubOwner string
-
-	// PublishedHelmChartGitHubRepo is the name of the GitHub repository for
-	// Helm charts.
-	PublishedHelmChartGitHubRepo string
-
-	// PublishedHelmChartGitHubBranch is the name of the main branch in the
-	// GitHub repository for Helm Charts.
-	PublishedHelmChartGitHubBranch string
 
 	// PublishedGitHubOrg is the org of the repository where the release will
 	// be published to.
@@ -119,6 +107,20 @@ type gcbPublishOptions struct {
 	// CosignPath points to the location of the cosign binary
 	CosignPath string
 
+	// PublishedHelmChartOCIRegistry is the OCI registry to push Helm charts to
+	PublishedHelmChartOCIRegistry string
+
+	// HelmPath points to the location of the helm binary
+	HelmPath string
+
+	// CranePath points to the location of the crane binary
+	CranePath string
+
+	// Runner is the shell command runner used to invoke external binaries
+	// (helm, crane, cosign). Tests can substitute a fake runner to avoid
+	// actually shelling out (and, importantly, to avoid hitting the KMS API).
+	Runner shell.Runner
+
 	// manualActionLogger logs to a buffer and is used by publish actions to log any manual
 	// actions that must be taken by the user even after a successful publish is completed.
 	// Get the log contents with ManualActionText()
@@ -129,7 +131,9 @@ type gcbPublishOptions struct {
 
 // NewGCBPublishOptions creates options and initializes loggers correctly
 func NewGCBPublishOptions() *gcbPublishOptions {
-	o := &gcbPublishOptions{}
+	o := &gcbPublishOptions{
+		Runner: shell.Command,
+	}
 
 	o.manualActionLogger = log.New(&o.manualActionBuffer, "* ", 0)
 
@@ -153,11 +157,15 @@ func (o *gcbPublishOptions) PublishActionList() ([]publishAction, error) {
 		return nil, fmt.Errorf("no artifacts to be published; nothing to do")
 	}
 
-	actionFuncs := make([]publishAction, len(actionNames))
-
-	for i, action := range actionNames {
-		// don't check if it's in map since we checked in canonicalizeAndVerifyPublishActions
-		actionFuncs[i] = publishActionMap[action]
+	selected := sets.NewString(actionNames...)
+	var actionFuncs []publishAction
+	for _, action := range publishActionOrder {
+		if selected.Has(action) {
+			actionFuncs = append(actionFuncs, publishActionMap[action])
+		}
+	}
+	if len(actionFuncs) != len(actionNames) {
+		return nil, fmt.Errorf("publishActionOrder is missing one of %v", actionNames)
 	}
 
 	return actionFuncs, nil
@@ -166,8 +174,7 @@ func (o *gcbPublishOptions) PublishActionList() ([]publishAction, error) {
 func (o *gcbPublishOptions) GitHubClient(ctx context.Context) (*github.Client, error) {
 	// construct the GitHub API client
 	// The GITHUB_TOKEN must be a GitHub personal access token with at least
-	// `repo` privileges and the associated user must have permission to create
-	// branches and PRs at the Helm GitHub repository.
+	// `repo` privileges.
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	if githubToken == "" {
 		return nil, fmt.Errorf("GITHUB_TOKEN environment variable not set - a token is always required to create a release")
@@ -187,16 +194,16 @@ func (o *gcbPublishOptions) AddFlags(fs *flag.FlagSet, markRequired func(string)
 	fs.StringVar(&o.ReleaseName, "release-name", "", "Name of the staged release to publish.")
 	fs.BoolVar(&o.NoMock, "nomock", false, "Whether to actually publish the release. If false, the command will exit after preparing the release for pushing.")
 	fs.StringVar(&o.PublishedImageRepository, "published-image-repo", release.DefaultImageRepository, "The docker image repository to push the release images & manifest lists to.")
-	fs.StringVar(&o.PublishedHelmChartGitHubOwner, "published-helm-chart-github-owner", release.DefaultHelmChartGitHubOwner, "The name of the owner of the GitHub repo for Helm charts.")
-	fs.StringVar(&o.PublishedHelmChartGitHubRepo, "published-helm-chart-github-repo", release.DefaultHelmChartGitHubRepo, "The name of the GitHub repo for Helm charts.")
-	fs.StringVar(&o.PublishedHelmChartGitHubBranch, "published-helm-chart-github-branch", release.DefaultHelmChartGitHubBranch, "The name of the main branch in the GitHub repository for Helm charts.")
 	fs.StringVar(&o.PublishedGitHubOrg, "published-github-org", release.DefaultGitHubOrg, "The org of the repository where the release wil be published to.")
 	fs.StringVar(&o.PublishedGitHubRepo, "published-github-repo", release.DefaultGitHubRepo, "The repo name in the provided org where the release will be published to.")
 	fs.StringVar(&o.CosignPath, "cosign-path", "cosign", "Full path to the cosign binary. Defaults to searching in $PATH for a binary called 'cosign'")
 	fs.StringVar(&o.SigningKMSKey, "signing-kms-key", defaultKMSKey, "Full name of the GCP KMS key to use for signing.")
-	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images.")
+	fs.BoolVar(&o.SkipSigning, "skip-signing", false, "Skip signing container images and Helm charts.")
 	fs.BoolVar(&o.AllowInvalidMetadataSignature, "allow-invalid-metadata-signature", false, "Downgrade staged metadata.json signature verification failures (including a missing signature) from an error to a warning instead of refusing to publish. Intended only for the roll-out period before staging signs metadata.json.")
-	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations are done in alphabetical order. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(allPublishActionNames(), ", ")))
+	fs.StringVar(&o.PublishedHelmChartOCIRegistry, "published-helm-chart-oci-registry", defaultHelmOCIRegistry, "The OCI registry to push Helm charts to.")
+	fs.StringVar(&o.HelmPath, "helm-path", "helm", "Full path to the helm binary. Defaults to searching in $PATH for a binary called 'helm'")
+	fs.StringVar(&o.CranePath, "crane-path", "crane", "Full path to the crane binary. Defaults to searching in $PATH for a binary called 'crane'")
+	fs.StringSliceVar(&o.PublishActions, "publish-actions", []string{"*"}, fmt.Sprintf("Comma-separated list of actions to take, or '*' to do everything. Only meaningful if nomock is set. Operations run in a fixed order: %s. Actions can be removed with a prefix of '-'. Options: %s", strings.Join(publishActionOrder, ", "), strings.Join(allPublishActionNames(), ", ")))
 }
 
 func (o *gcbPublishOptions) print() {
@@ -205,15 +212,15 @@ func (o *gcbPublishOptions) print() {
 	log.Printf("  ReleaseName: %q", o.ReleaseName)
 	log.Printf("  NoMock: %t", o.NoMock)
 	log.Printf("  PublishedImageRepo: %q", o.PublishedImageRepository)
-	log.Printf("  PublishedHelmChartGitHubRepo: %q", o.PublishedHelmChartGitHubRepo)
-	log.Printf("  PublishedHelmChartGitHubOwner: %q", o.PublishedHelmChartGitHubOwner)
-	log.Printf("  PublishedHelmChartGitHubBranch: %q", o.PublishedHelmChartGitHubBranch)
 	log.Printf("  PublishedGitHubOrg: %q", o.PublishedGitHubOrg)
 	log.Printf("  PublishedGitHubRepo: %q", o.PublishedGitHubRepo)
 	log.Printf("  CosignPath: %q", o.CosignPath)
 	log.Printf("  SkipSigning: %v", o.SkipSigning)
 	log.Printf("  SigningKMSKey: %q", o.SigningKMSKey)
 	log.Printf("  AllowInvalidMetadataSignature: %v", o.AllowInvalidMetadataSignature)
+	log.Printf("  PublishedHelmChartOCIRegistry: %q", o.PublishedHelmChartOCIRegistry)
+	log.Printf("  HelmPath: %q", o.HelmPath)
+	log.Printf("  CranePath: %q", o.CranePath)
 	log.Printf("  PublishActions: %q", strings.Join(o.PublishActions, ","))
 }
 
@@ -232,7 +239,7 @@ func allPublishActionNames() []string {
 // canonicalizeAndVerifyPublishActions converts a list of raw actions into
 // a slice of canonical action names (whitespace removed, lowercased), returning an error
 // if any of the actions don't correspond to known actions. Supports removing actions via a prefix of "-"
-// Actions are returned in alphabetical order
+// Actions are returned in alphabetical order; PublishActionList puts them in execution order.
 func canonicalizeAndVerifyPublishActions(rawActions []string) ([]string, error) {
 	actions := sets.NewString()
 
@@ -264,9 +271,19 @@ func canonicalizeAndVerifyPublishActions(rawActions []string) ([]string, error) 
 }
 
 var publishActionMap map[string]publishAction = map[string]publishAction{
-	"helmchartpr":         pushHelmChartPR,
+	"helmchartoci":        pushHelmChartOCI,
 	"githubrelease":       pushGitHubRelease,
 	"pushcontainerimages": pushContainerImages,
+}
+
+// publishActionOrder is the order in which selected publish actions run. The
+// Helm chart goes last because it references the container images: publishing
+// it first would expose a chart whose images may not exist yet, or never exist
+// if the image push fails. Every key of publishActionMap must appear here.
+var publishActionOrder = []string{
+	"githubrelease",
+	"pushcontainerimages",
+	"helmchartoci",
 }
 
 func gcbPublishCmd(rootOpts *rootOptions) *cobra.Command {
@@ -456,36 +473,99 @@ func (o *gcbPublishOptions) doVerifyStagedMetadata(ctx context.Context, metadata
 	return nil
 }
 
-func pushHelmChartPR(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
-	githubClient, err := o.GitHubClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create github client for pushing helm chart PR: %w", err)
+func pushHelmChartOCI(ctx context.Context, o *gcbPublishOptions, rel *release.Unpacked) error {
+	log.Printf("Pushing Helm chart to OCI registry %q", o.PublishedHelmChartOCIRegistry)
+
+	if len(rel.Charts) == 0 {
+		return fmt.Errorf("no charts found in unpacked release")
 	}
 
-	helmRepo := helm.NewGitHubRepositoryManager(
-		&helm.GitHubClient{
-			GitClient:          githubClient.Git,
-			PullRequestClient:  githubClient.PullRequests,
-			RepositoriesClient: githubClient.Repositories,
-			UsersClient:        githubClient.Users,
-		},
-		o.PublishedHelmChartGitHubOwner,
-		o.PublishedHelmChartGitHubRepo,
-		o.PublishedHelmChartGitHubBranch,
-	)
-	if err := helmRepo.Check(ctx); err != nil {
-		return fmt.Errorf("error in preflight checks for Helm GitHub repository: %v", err)
+	runner := o.Runner
+
+	// Verify tools are available
+	log.Printf("Verifying helm installation")
+	if err := runner(ctx, "", o.HelmPath, "version"); err != nil {
+		return fmt.Errorf("failed to verify helm installation: %w", err)
 	}
 
-	log.Printf("Pushing Helm chart(s)")
-
-	prURLForHelmCharts, err := helmRepo.Publish(ctx, rel.ReleaseName, rel.Charts...)
-	if err != nil {
-		return err
+	log.Printf("Verifying crane installation")
+	if err := runner(ctx, "", o.CranePath, "version"); err != nil {
+		return fmt.Errorf("failed to verify crane installation: %w", err)
 	}
 
-	o.manualActionLogger.Printf("Review and merge the GitHub PR containing the Helm charts: %s", prURLForHelmCharts)
+	ociURL := fmt.Sprintf("oci://%s", o.PublishedHelmChartOCIRegistry)
 
+	var parsedKey sign.GCPKMSKey
+	if !o.SkipSigning {
+		var err error
+		parsedKey, err = sign.NewGCPKMSKey(o.SigningKMSKey)
+		if err != nil {
+			return fmt.Errorf("failed to parse KMS key: %w", err)
+		}
+	}
+
+	// signAndVerify signs ref with cosign and checks the signature, unless
+	// --skip-signing is set. Both steps are retried like image signing is,
+	// because the registry can briefly lag behind a push.
+	signAndVerify := func(ref string) error {
+		if o.SkipSigning {
+			log.Printf("Skipping signing for %s as skip-signing is set", ref)
+			return nil
+		}
+
+		log.Printf("Signing chart %s with cosign", ref)
+		if err := retry(ctx, func() error {
+			return cosign.Sign(ctx, runner, o.CosignPath, ref, parsedKey)
+		}); err != nil {
+			return fmt.Errorf("failed to sign chart %s: %w", ref, err)
+		}
+
+		log.Printf("Verifying chart signature for %s", ref)
+		if err := retry(ctx, func() error {
+			return cosign.Verify(ctx, runner, o.CosignPath, ref, parsedKey)
+		}); err != nil {
+			return fmt.Errorf("failed to verify chart signature for %s: %w", ref, err)
+		}
+		return nil
+	}
+
+	for _, chart := range rel.Charts {
+		if chart.ProvPath() == nil {
+			log.Printf("Warning: .prov file not found for chart %q in release %s - this should only happen for releases earlier than v1.6.0", chart.Name(), rel.ReleaseVersion)
+		}
+
+		// Push chart to OCI registry (helm automatically pushes .prov if it exists)
+		log.Printf("Pushing chart %q to %s", chart.Name(), ociURL)
+		if err := runner(ctx, "", o.HelmPath, "push", chart.Path(), ociURL); err != nil {
+			return fmt.Errorf("failed to push chart %q to OCI registry: %w", chart.Name(), err)
+		}
+
+		// helm push tags the chart with the version from Chart.yaml, so build
+		// the reference from the same value.
+		chartRef := fmt.Sprintf("%s/%s:%s", o.PublishedHelmChartOCIRegistry, chart.Name(), chart.Version())
+		if err := signAndVerify(chartRef); err != nil {
+			return err
+		}
+
+		// Also publish the chart under the version without the "v" prefix, which
+		// is what "helm upgrade --version" and version-range lookups expect.
+		nonVVersion, hadV := strings.CutPrefix(chart.Version(), "v")
+		if !hadV {
+			continue
+		}
+
+		destRef := fmt.Sprintf("%s/%s:%s", o.PublishedHelmChartOCIRegistry, chart.Name(), nonVVersion)
+		log.Printf("Copying chart %q to non-v-prefixed version: %s", chart.Name(), destRef)
+		if err := runner(ctx, "", o.CranePath, "copy", chartRef, destRef); err != nil {
+			return fmt.Errorf("failed to copy chart tag for %q: %w", chart.Name(), err)
+		}
+
+		if err := signAndVerify(destRef); err != nil {
+			return err
+		}
+	}
+
+	log.Printf("Successfully pushed %d Helm chart(s) to OCI registry", len(rel.Charts))
 	return nil
 }
 
@@ -675,7 +755,7 @@ func signRegistryContent(ctx context.Context, o *gcbPublishOptions, allContentTo
 
 	for _, toSign := range allContentToSign {
 		log.Printf("Signing %q", toSign)
-		if err := retry(ctx, func() error { return cosign.Sign(ctx, o.CosignPath, []string{toSign}, parsedKey) }); err != nil {
+		if err := retry(ctx, func() error { return cosign.Sign(ctx, o.Runner, o.CosignPath, toSign, parsedKey) }); err != nil {
 			return fmt.Errorf("failed to sign container image / manifest list %q: %w", toSign, err)
 		}
 
