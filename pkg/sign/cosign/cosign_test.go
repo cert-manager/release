@@ -17,8 +17,9 @@ limitations under the License.
 package cosign
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/cert-manager/release/pkg/sign"
 )
@@ -42,9 +43,36 @@ func TestVerifyBlobArgs(t *testing.T) {
 		"gcpkms://projects/proj/locations/loc/keyRings/ring/cryptoKeys/key/versions/1",
 		"--signature",
 		"/tmp/metadata.json.sig",
+		"--insecure-ignore-tlog=true",
 		"/tmp/metadata.json",
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("verifyBlobArgs() = %v, want %v", got, want)
-	}
+	assert.Equal(t, want, got)
+}
+
+const (
+	testKeyCosign = "gcpkms://projects/proj/locations/loc/keyRings/ring/cryptoKeys/key/versions/1"
+	testContainer = "quay.io/jetstack/charts/cert-manager:v1.99.0"
+)
+
+func TestSignArgs(t *testing.T) {
+	// These flags match hack/push_and_sign_chart.sh.
+	assert.Equal(t, []string{
+		"sign",
+		"--key", testKeyCosign,
+		"--tlog-upload=false",
+		"--new-bundle-format=false",
+		"--use-signing-config=false",
+		testContainer,
+	}, signArgs(testContainer, testKey(t)))
+}
+
+func TestVerifyArgs(t *testing.T) {
+	// These flags match hack/push_and_sign_chart.sh.
+	assert.Equal(t, []string{
+		"verify",
+		"--key", testKeyCosign,
+		"--signature-digest-algorithm", "sha512",
+		"--insecure-ignore-tlog=true",
+		testContainer,
+	}, verifyArgs(testContainer, testKey(t)))
 }
