@@ -36,6 +36,11 @@ func HelmChart(ctx context.Context, key GCPKMSKey, chartPath string) ([]byte, er
 		return nil, fmt.Errorf("failed to create KMS signer: %w", err)
 	}
 
+	return signHelmChart(signatory, chartPath)
+}
+
+// signHelmChart signs a packaged helm chart with the given signatory.
+func signHelmChart(signatory *helmsign.Signatory, chartPath string) ([]byte, error) {
 	archiveData, err := os.ReadFile(chartPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read chart %q: %w", chartPath, err)

@@ -30,6 +30,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	cloudkms "google.golang.org/api/cloudkms/v1"
@@ -160,7 +161,16 @@ func (k *kmsSigner) KMSDigest(digest []byte) (*cloudkms.Digest, error) {
 	return kmsDigest, nil
 }
 
-func (k *kmsSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+func (k *kmsSigner) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (_ []byte, err error) {
+	// go-crypto drops the error from an RSA crypto.Signer, so log it here or
+	// the cause of a failed signature is lost:
+	// https://github.com/ProtonMail/go-crypto/blob/v1.5.2/openpgp/packet/signature.go#L1004
+	defer func() {
+		if err != nil {
+			log.Printf("KMS signing with %q failed: %v", k.name, err)
+		}
+	}()
+
 	kmsDigest, err := k.KMSDigest(digest)
 	if err != nil {
 		return nil, fmt.Errorf("input digest must be valid size for given key type: %w", err)

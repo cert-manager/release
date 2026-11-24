@@ -64,10 +64,20 @@ func BootstrapPGPFromGCP(ctx context.Context, key GCPKMSKey) (PGPArmoredBlock, e
 		return "", fmt.Errorf("failed to get an entity from key %q: %w", key, err)
 	}
 
+	if err := addSelfSignedIdentity(entity, packetCfg); err != nil {
+		return "", err
+	}
+
+	return armoredPublicKey(entity)
+}
+
+// addSelfSignedIdentity adds the cert-manager maintainers identity to entity,
+// self-signed with its private key.
+func addSelfSignedIdentity(entity *openpgp.Entity, packetCfg *packet.Config) error {
 	// hardcode name + email, at least for now
 	uid := packet.NewUserId(pgpName, "" /* no comment */, pgpEmail)
 	if uid == nil {
-		return "", fmt.Errorf("could not generate PGP user ID metadata; this indicates there were invalid characters in name or email")
+		return fmt.Errorf("could not generate PGP user ID metadata; this indicates there were invalid characters in name or email")
 	}
 
 	isPrimary := true
@@ -93,9 +103,20 @@ func BootstrapPGPFromGCP(ctx context.Context, key GCPKMSKey) (PGPArmoredBlock, e
 		},
 	}
 
-	if err := entity.Identities[uid.Id].SelfSignature.SignUserId(uid.Id, entity.PrimaryKey, entity.PrivateKey, packetCfg); err != nil {
-		return "", fmt.Errorf("could not self-sign PGP public key: %w", err)
+	identity := entity.Identities[uid.Id]
+	if err := identity.SelfSignature.SignUserId(uid.Id, entity.PrimaryKey, entity.PrivateKey, packetCfg); err != nil {
+		return fmt.Errorf("could not self-sign PGP public key: %w", err)
 	}
+
+	// go-crypto serializes Signatures, not SelfSignature:
+	// https://github.com/ProtonMail/go-crypto/blob/v1.5.2/openpgp/keys.go#L798
+	identity.Signatures = []*packet.Signature{identity.SelfSignature}
+
+	return nil
+}
+
+// armoredPublicKey returns the ASCII-armored public key block for entity.
+func armoredPublicKey(entity *openpgp.Entity) (PGPArmoredBlock, error) {
 
 	out := &bytes.Buffer{}
 
@@ -145,17 +166,24 @@ func deriveEntity(ctx context.Context, key GCPKMSKey) (*openpgp.Entity, *packet.
 		return nil, nil, fmt.Errorf("could not create KMS signer: %w", err)
 	}
 
-	entity := &openpgp.Entity{
-		PrimaryKey: packet.NewRSAPublicKey(signer.CreationTime(), signer.RSAPublicKey()),
-		PrivateKey: packet.NewSignerPrivateKey(signer.CreationTime(), signer),
+	return entityFromSigner(signer), cfg, nil
+}
+
+// entityFromSigner wraps an RSA signer, such as a KMS key, in a PGP entity.
+func entityFromSigner(signer kmssigner.Signer) *openpgp.Entity {
+	publicKey := packet.NewRSAPublicKey(signer.CreationTime(), signer.RSAPublicKey())
+
+	// packet.NewSignerPrivateKey panics on any signer that is not an in-memory
+	// private key type, so build the private key packet by hand. RSA signing
+	// accepts any crypto.Signer:
+	// https://github.com/ProtonMail/go-crypto/blob/v1.5.2/openpgp/packet/signature.go#L1003-L1004
+	// > // supports both *rsa.PrivateKey and crypto.Signer
+	return &openpgp.Entity{
+		PrimaryKey: publicKey,
+		PrivateKey: &packet.PrivateKey{
+			PublicKey:  *publicKey,
+			PrivateKey: signer,
+		},
 		Identities: make(map[string]*openpgp.Identity),
 	}
-
-	entity.PrivateKey.PubKeyAlgo = packet.PubKeyAlgoRSA
-
-	// The original states that this is required possibly because of a bug:
-	// "Without this, signatures end up with a key ID that doesn't match the primary key"
-	entity.PrivateKey.KeyId = entity.PrimaryKey.KeyId
-
-	return entity, cfg, nil
 }
