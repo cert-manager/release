@@ -22,6 +22,10 @@ import (
 	"os/exec"
 )
 
+// Runner runs a command. Command is the real implementation; tests can
+// substitute a fake to record invocations without executing anything.
+type Runner func(ctx context.Context, workDir string, cmd string, args ...string) error
+
 // Command runs the given command with the given args
 func Command(ctx context.Context, workDir string, cmd string, args ...string) error {
 	c := exec.CommandContext(ctx, cmd, args...)

@@ -59,18 +59,6 @@ const (
 	// code.
 	DefaultGitHubRepo = "cert-manager"
 
-	// DefaultHelmChartGitHubOwner is the name of the owner of the default
-	// GitHub repository for Helm charts.
-	DefaultHelmChartGitHubOwner = "jetstack"
-
-	// DefaultHelmChartGitHubRepo is the name of the default GitHub repository
-	// for Helm charts.
-	DefaultHelmChartGitHubRepo = "jetstack-charts"
-
-	// DefaultHelmChartGitHubBranch is the name of the main branch in the GitHub
-	// repository for Helm charts.
-	DefaultHelmChartGitHubBranch = "main"
-
 	// BuildTypeRelease denotes that a build is targeting an actual named
 	// release and is not just a development build that has been created using
 	// the release tool.
